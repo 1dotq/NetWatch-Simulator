@@ -1584,7 +1584,7 @@ class DigitalTwinApp {
 
   attachCLISession(node) {
     const role = (node.role || '').toLowerCase();
-    const isPremiumDevice = role.includes('sis') || role.includes('safety') || role.includes('diode') || role.includes('claroty') || role.includes('vfd') || role.includes('powerflex');
+    const isPremiumDevice = role.includes('plc') || role.includes('controller') || role.includes('rtu') || role.includes('hmi') || role.includes('scada') || role.includes('actuator') || role.includes('valve') || role.includes('diode') || role.includes('claroty') || role.includes('vfd') || role.includes('drive');
     if (isPremiumDevice) {
       if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
         this.detachCLISession();
@@ -3217,7 +3217,7 @@ class DigitalTwinApp {
 
   openDeviceConfigWindow(node) {
     const role = (node.role || '').toLowerCase();
-    const isPremiumDevice = role.includes('sis') || role.includes('safety') || role.includes('diode') || role.includes('claroty') || role.includes('vfd') || role.includes('powerflex');
+    const isPremiumDevice = role.includes('plc') || role.includes('controller') || role.includes('rtu') || role.includes('hmi') || role.includes('scada') || role.includes('actuator') || role.includes('valve') || role.includes('diode') || role.includes('claroty') || role.includes('vfd') || role.includes('drive');
     if (isPremiumDevice) {
       if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
         return;
@@ -3717,7 +3717,7 @@ class DigitalTwinApp {
     document.querySelectorAll('.tool-item').forEach(item => {
       item.onclick = (e) => {
         const tool = item.getAttribute('data-tool');
-        if (['sis-controller', 'vfd-drive', 'data-diode', 'claroty-ids'].includes(tool)) {
+        if (['siemens-plc', 'ab-plc', 'schneider-rtu', 'hmi', 'actuator', 'sis-controller', 'vfd-drive', 'data-diode', 'claroty-ids'].includes(tool)) {
           if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
             return;
           }
@@ -3758,8 +3758,11 @@ class DigitalTwinApp {
   }
 
   deployCustomDevice(tool, x, y) {
-    if (['sis-controller', 'vfd-drive', 'data-diode', 'claroty-ids'].includes(tool)) {
+    if (['siemens-plc', 'ab-plc', 'schneider-rtu', 'hmi', 'actuator', 'sis-controller', 'vfd-drive', 'data-diode', 'claroty-ids'].includes(tool)) {
       if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
+        document.querySelectorAll('.tool-item').forEach(el => el.classList.remove('active-tool'));
+        this.activePlacementTool = null;
+        if (this.canvas) this.canvas.linkingSourceNode = null;
         return;
       }
     }

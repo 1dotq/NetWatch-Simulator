@@ -111,6 +111,9 @@
         <button id="btnShowBriefing" type="button" class="cyber-btn-sm" style="height: 32px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(56, 189, 248, 0.4); color: var(--brand-blue); background: rgba(14, 165, 233, 0.05);" title="Review Challenge Mission Briefing & Objectives">
           📋 MISSION BRIEFING
         </button>
+        <button id="btnLicenseStatus" type="button" class="cyber-btn-sm" style="height: 32px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(245, 158, 11, 0.4); color: #f59e0b; background: rgba(245, 158, 11, 0.05);" title="Aetheris License Tier (Click to Upgrade)">
+          ⚡ COMMUNITY TIER
+        </button>
         <button id="btnResetTwin" type="button" class="cyber-btn-sm btn-danger-outline" style="height: 32px;" title="Reset Digital Twin to Baseline State">
           RESET TWIN
         </button>
@@ -737,6 +740,71 @@
           <button id="instTaskAgentBtn" class="cyber-btn" style="align-self: flex-start; margin-top: 4px; padding: 6px 12px; font-size: 0.7rem; border-color: var(--brand-blue); background: rgba(14, 165, 233, 0.1); color: #fff;">
             ⚡ TASK CO-DRIVER FOR BLUEPRINT SETUP
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Premium Licensing & Paywall Modal -->
+  <div id="premiumPaywallModal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(3, 7, 18, 0.9); display: flex; align-items: center; justify-content: center; z-index: 30000; backdrop-filter: blur(12px);">
+    <div class="dark-window" style="width: 520px; border: 1px solid #a855f7; box-shadow: 0 0 50px rgba(168, 85, 247, 0.35);">
+      <div class="window-header" style="background: linear-gradient(90deg, #0f111a 0%, rgba(168, 85, 247, 0.2) 100%);">
+        <span class="window-title" style="color: #c084fc;">🔑 AETHERIS SIMULATOR — LICENSE GATEWAY</span>
+        <button id="paywallCloseBtn" class="cyber-btn" style="padding: 2px 8px; font-size: 0.7rem; border-color: #a855f7; color: #a855f7;">✕ CANCEL</button>
+      </div>
+      <div class="window-body" style="padding: 24px; font-family: var(--font-sans), sans-serif; display: flex; flex-direction: column; gap: 16px;">
+        <div style="text-align: center; margin-bottom: 8px;">
+          <div style="font-size: 1.6rem; font-weight: 800; color: #fff; text-shadow: 0 0 15px rgba(168,85,247,0.5); letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            💎 UNLOCK PROFESSIONAL TIER
+          </div>
+          <p style="margin: 6px 0 0 0; font-size: 0.75rem; color: #94a3b8;">
+            You have accessed a premium Aetheris engine feature. Upgrade your workspace license to remove limitations.
+          </p>
+        </div>
+
+        <!-- Tiers Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <!-- Free Tier -->
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <div style="font-size: 0.65rem; font-weight: 700; color: #64748b; letter-spacing: 0.1em; text-transform: uppercase;">Community</div>
+              <div style="font-size: 1.2rem; font-weight: 800; color: #fff; margin: 4px 0 8px 0;">$0 <span style="font-size: 0.65rem; color: #64748b; font-weight: 400;">/ Forever</span></div>
+              <ul style="margin: 0; padding-left: 12px; font-size: 0.65rem; color: #94a3b8; display: flex; flex-direction: column; gap: 4px;">
+                <li>Standard Switch / PC Nodes</li>
+                <li>Manual Cabled Linkages</li>
+                <li>Baseline Lab Scenario</li>
+              </ul>
+            </div>
+            <div style="font-size: 0.65rem; font-weight: 700; color: #ef4444; margin-top: 12px; text-align: center; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.05); padding: 4px; border-radius: 4px;">
+              ACTIVE BY DEFAULT
+            </div>
+          </div>
+          <!-- Pro Tier -->
+          <div style="background: rgba(168, 85, 247, 0.04); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: inset 0 0 15px rgba(168,85,247,0.05);">
+            <div>
+              <div style="font-size: 0.65rem; font-weight: 700; color: #c084fc; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 4px;">★ PROFESSIONAL</div>
+              <div style="font-size: 1.2rem; font-weight: 800; color: #fff; margin: 4px 0 8px 0;">$19.99 <span style="font-size: 0.65rem; color: #a855f7; font-weight: 400;">/ One-time</span></div>
+              <ul style="margin: 0; padding-left: 12px; font-size: 0.65rem; color: #cbd5e1; display: flex; flex-direction: column; gap: 4px;">
+                <li style="color: #f5f3ff;">🚀 25-Node Purdue Models</li>
+                <li style="color: #f5f3ff;">📡 Physical Hop Tracer Tool</li>
+                <li style="color: #f5f3ff;">🗣️ Voice Assist Narrator</li>
+                <li style="color: #f5f3ff;">🚨 Triconex, Owl Data Diodes</li>
+              </ul>
+            </div>
+            <button id="paywallBuyBtn" class="cyber-btn" style="margin-top: 12px; font-size: 0.65rem; border-color: #a855f7; background: rgba(168,85,247,0.25); color: #fff; text-shadow: 0 0 8px #c084fc;">
+              UPGRADE NOW
+            </button>
+          </div>
+        </div>
+
+        <!-- License Key Form -->
+        <div style="margin-top: 10px; padding: 14px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(168, 85, 247, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">
+          <label style="font-size: 0.65rem; font-weight: 700; color: #a855f7; letter-spacing: 0.05em;">🔑 ENTER COMMERCIAL LICENSE KEY</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="licenseKeyInput" placeholder="AETHERIS-XXXX-XXXX-XXXX" style="flex: 1; background: #090d16; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 0.75rem; font-family: var(--font-mono); outline: none;">
+            <button id="paywallVerifyBtn" class="cyber-btn" style="padding: 0 16px; font-size: 0.7rem; border-color: #a855f7; color: #c084fc;">ACTIVATE</button>
+          </div>
+          <span id="licenseFeedbackText" style="font-size: 0.6rem; color: #64748b;">Enter your purchase license or demo code to register the workspace.</span>
         </div>
       </div>
     </div>

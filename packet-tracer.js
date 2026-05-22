@@ -37,6 +37,7 @@ class PacketTracer {
   }
 
   openTracer() {
+    if (!this.app.checkPremiumFeature('tracer', '📡 PHYSICAL HOP TRACER')) return;
     if (!this.app.canvas) return;
     this.modal.classList.remove('hidden');
     this.populateDropdowns();

@@ -45,6 +45,10 @@ class DigitalTwinApp {
     this.redoStack = [];
     this.initHistory();
 
+    // Commercial Licensing Tier Configuration
+    this.currentLicenseTier = 'community';
+    this.validLicenseKeys = ['AETHERIS-PRO-2026', 'AETHERIS-DEV-9999'];
+
     // Performance Mode: default to 'eco' (Wireframe) for fluidity, but honor a
     // previously saved user preference.
     let savedPerf = 'eco';
@@ -385,6 +389,11 @@ class DigitalTwinApp {
     });
 
     btnLaunch.onclick = () => {
+      if (selectedLab && selectedLab.projectType === 'purdue') {
+        if (!this.checkPremiumFeature('purdue-model', '🚀 25-NODE PURDUE MODEL ARCHITECTURE TEMPLATE')) {
+          return;
+        }
+      }
       // Save credentials settings
       this.llm.setSettings(selProvider.value, txtApiKey.value);
 
@@ -525,6 +534,7 @@ class DigitalTwinApp {
     const btnVoice = document.getElementById('btnVoiceAssist');
     if (btnVoice) {
       btnVoice.onclick = () => {
+        if (!this.checkPremiumFeature('voice', '🗣️ VOICE ASSIST NARRATOR')) return;
         this.voiceAssistEnabled = !this.voiceAssistEnabled;
         btnVoice.innerHTML = this.voiceAssistEnabled ? '🔊' : '🔇';
         btnVoice.style.color = this.voiceAssistEnabled ? '#22c55e' : '#ef4444';
@@ -1185,6 +1195,66 @@ class DigitalTwinApp {
     if (btnCtf1) btnCtf1.onclick = () => this.startCtfScenario(1);
     if (btnCtf2) btnCtf2.onclick = () => this.startCtfScenario(2);
     if (btnCtf3) btnCtf3.onclick = () => this.startCtfScenario(3);
+
+    // Commercial Licensing & Paywall Event Bindings
+    const btnLicenseStatus = document.getElementById('btnLicenseStatus');
+    const paywallCloseBtn = document.getElementById('paywallCloseBtn');
+    const paywallVerifyBtn = document.getElementById('paywallVerifyBtn');
+    const paywallBuyBtn = document.getElementById('paywallBuyBtn');
+    const premiumModal = document.getElementById('premiumPaywallModal');
+    const licenseInput = document.getElementById('licenseKeyInput');
+    const licenseFeedback = document.getElementById('licenseFeedbackText');
+
+    if (btnLicenseStatus) {
+      btnLicenseStatus.onclick = () => {
+        if (premiumModal) premiumModal.classList.remove('hidden');
+        if (licenseInput) licenseInput.focus();
+      };
+    }
+
+    if (paywallCloseBtn) {
+      paywallCloseBtn.onclick = () => {
+        if (premiumModal) premiumModal.classList.add('hidden');
+      };
+    }
+
+    if (paywallBuyBtn) {
+      paywallBuyBtn.onclick = () => {
+        this.showToast("Redirecting to secure Aetheris checkout portal... (Demo Mode)", "info");
+        if (licenseFeedback) {
+          licenseFeedback.textContent = "Checkout initiated! Type key AETHERIS-PRO-2026 below for instant demo upgrade.";
+          licenseFeedback.style.color = "#c084fc";
+        }
+      };
+    }
+
+    if (paywallVerifyBtn) {
+      paywallVerifyBtn.onclick = () => {
+        const key = (licenseInput.value || '').trim();
+        if (this.validLicenseKeys.includes(key)) {
+          this.currentLicenseTier = 'professional';
+          this.showToast("⚡ LICENSE KEY VALIDATED: Aetheris Professional Activated!", "success");
+          this.orchestrator.logSystem("LICENSE REGISTERED: Aetheris Professional Digital Twin engine activated successfully.", "success");
+          
+          // Update header status badge styling beautifully
+          if (btnLicenseStatus) {
+            btnLicenseStatus.textContent = "★ PROFESSIONAL TIER";
+            btnLicenseStatus.style.color = "#c084fc";
+            btnLicenseStatus.style.borderColor = "rgba(168, 85, 247, 0.5)";
+            btnLicenseStatus.style.background = "rgba(168, 85, 247, 0.08)";
+            btnLicenseStatus.title = "Aetheris Professional Workspace Active";
+          }
+          
+          if (premiumModal) premiumModal.classList.add('hidden');
+        } else {
+          this.showToast("Invalid License Key format. Please try again.", "error");
+          if (licenseFeedback) {
+            licenseFeedback.textContent = "⚠️ Validation failure: Code not found in remote ledger. Try: AETHERIS-PRO-2026";
+            licenseFeedback.style.color = "#f87171";
+          }
+        }
+      };
+    }
   }
 
   // Global keyboard shortcuts: Space toggles play/pause, Escape dismisses
@@ -1575,6 +1645,20 @@ class DigitalTwinApp {
         <div class="cli-line comment-line"># Standby. Click any topology node above to open a direct SSH/Serial CLI session.</div>
       `;
     }
+  }
+
+  checkPremiumFeature(featureName, displayName) {
+    if (this.currentLicenseTier === 'professional') {
+      return true;
+    }
+    this.showToast(`Premium Feature Blocked: Upgrade to Professional Tier to unlock ${displayName || featureName}!`, "warning");
+    const paywall = document.getElementById('premiumPaywallModal');
+    if (paywall) {
+      paywall.classList.remove('hidden');
+      const keyInput = document.getElementById('licenseKeyInput');
+      if (keyInput) keyInput.focus();
+    }
+    return false;
   }
 
   getNodeConfig(node) {
@@ -3654,6 +3738,11 @@ class DigitalTwinApp {
   }
 
   deployCustomDevice(tool, x, y) {
+    if (['sis-controller', 'vfd-drive', 'data-diode', 'claroty-ids'].includes(tool)) {
+      if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
+        return;
+      }
+    }
     const counts = {};
     this.canvas.nodes.forEach(n => {
       const base = n.role.split(' ')[0] || n.role;

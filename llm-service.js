@@ -36,7 +36,7 @@ class AELlmService {
   // Generate robust system prompt providing full twin application state vectors
   buildSystemPrompt(currentNodes, currentLinks, currentProject, physicalState = null) {
     const nodesJson = JSON.stringify(currentNodes.map(n => ({
-      id: n.id, name: n.name, type: n.type, role: n.role, ip: n.ip, x: Math.round(n.x), y: Math.round(n.y), status: n.status
+      id: n.id, name: n.name, type: n.type, role: n.role, ip: n.ip, x: Math.round(n.x), y: Math.round(n.y), status: n.status, config: n.config
     })));
 
     const linksJson = JSON.stringify(currentLinks.map(l => ({
@@ -58,6 +58,8 @@ Active Physical ICS Variables (Reactor-3):
 
     return `You are AETHERIS Co-Pilot, an advanced AI industrial network engineer, SCADA architect, and digital twin cyber-security orchestrator.
 You have FULL control over the simulation topology. The user is asking you to modify, analyze, or discuss the current digital twin.
+
+Each node in the topology contains a detailed "config" object representing its live running configurations (such as network interfaces, hostnames, subnet configurations, gateways, active static/dynamic routing, ACL security filters, OSPF states, physical SCADA register bindings, data diode modes, and PLC safety interlocks). Use this visibility to perform deep diagnostics, locate communication bottlenecks, recommend security hardening rules, or explain specific device parameters.
 
 Current Project Workspace: "${currentProject}"
 Current Topology Nodes:

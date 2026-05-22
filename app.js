@@ -1963,17 +1963,8 @@ class DigitalTwinApp {
   }
 
   checkPremiumFeature(featureName, displayName) {
-    if (this.currentLicenseTier === 'professional') {
-      return true;
-    }
-    this.showToast(`Premium Feature Blocked: Upgrade to Professional Tier to unlock ${displayName || featureName}!`, "warning");
-    const paywall = document.getElementById('premiumPaywallModal');
-    if (paywall) {
-      paywall.classList.remove('hidden');
-      const keyInput = document.getElementById('licenseKeyInput');
-      if (keyInput) keyInput.focus();
-    }
-    return false;
+    // Unlocked and bypassed for premium features in Community Edition per user directive.
+    return true;
   }
 
   getNodeConfig(node) {
@@ -3403,9 +3394,17 @@ class DigitalTwinApp {
     this.appendChatBubble('AETHERIS AI', `<span class="pulse-indicator"></span> AETHERIS AI is calculating topology changes...`, 'agent-bubble', thinkingId);
 
     try {
+      const nodesWithConfig = this.canvas.nodes.map(n => {
+        const config = this.getNodeConfig(n);
+        return {
+          ...n,
+          config: config
+        };
+      });
+
       const response = await this.llm.sendPrompt(
         promptText, 
-        this.canvas.nodes, 
+        nodesWithConfig, 
         this.canvas.links, 
         this.activeProject,
         this.activeProjectType === 'reactor' ? this.sim : null

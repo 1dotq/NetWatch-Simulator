@@ -353,6 +353,261 @@ class DigitalTwinApp {
         ],
         projectType: 'purdue',
         coDriverPayload: 'AETHERIS Co-Driver, analyze our 25-node Purdue model digital twin. Verify all boundaries and confirm VLAN alignment across Level 4 and Level 0!'
+      },
+      {
+        id: 'lab-17',
+        title: 'S7comm Ransomware Audit',
+        icon: '🦠',
+        category: 'critical',
+        categoryLabel: 'ICS SECURITY',
+        difficulty: 'Hard',
+        desc: 'Audit Siemens S7 controllers to identify rogue memory injection and block ransomware payloads.',
+        objective: 'An advanced threat is targeting S7-1500 memory slots. Run diagnostics on the PLC CPU, locate compromised database blocks, and secure the controller.',
+        tasks: [
+          'Verify S7 PLC system status via CPU mode inspection.',
+          'Analyze diagnostic-buffer logs to locate Event ID 0x3841 blocks.',
+          'Activate protected run mode configuration to lock out remote memory updates.'
+        ],
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, how do I analyze S7comm vulnerabilities? Provide the PLC diagnostic codes to verify slot protections!'
+      },
+      {
+        id: 'lab-18',
+        title: 'Safety Loop Key-Switch Lockdown',
+        icon: '🔑',
+        category: 'critical',
+        categoryLabel: 'ICS CONTROL',
+        difficulty: 'Medium',
+        desc: 'Enforce Triconex TMR safety loops by locking the hardware key switch against unauthorized writes.',
+        objective: 'Remote SCADA packets are attempting to alter safety ESD thresholds. Access the Triconex SIS controller and enforce hard hardware protection.',
+        tasks: [
+          'Run "show key-switch" to check the active voter registry state.',
+          'Trace safety loops LP-001 and LP-002 thresholds.',
+          'Execute bypass lockdown to restrict ESD variables modifications.'
+        ],
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, guide me through securing the Triconex SIS using key-switch parameters and safety loop bypass locking!'
+      },
+      {
+        id: 'lab-19',
+        title: 'FW-101 IPSec VPN Encryption',
+        icon: '🕳',
+        category: 'sec',
+        categoryLabel: 'THREAT DEFENSE',
+        difficulty: 'Hard',
+        desc: 'Establish secure cryptographic tunnels between remote substations and corporate cores.',
+        objective: 'OT data from external distribution nodes is traversing public channels in plaintext. Cable a secure IPSec tunnel on the FW-01 security cluster.',
+        tasks: [
+          'Define cryptographic phase 1 proposal parameters (AES-256 / SHA-256).',
+          'Configure a strict Crypto Map binding the peer gateway IP.',
+          'Initiate high-security tunnel traffic and verify encrypted packet sweeps.'
+        ],
+        projectType: 'campus',
+        coDriverPayload: 'Aetheris Co-Driver, provide the ASA-style VPN configuration commands to set up Phase 1/Phase 2 IPSec parameters!'
+      },
+      {
+        id: 'lab-20',
+        title: 'Modbus Rogue Server Exposure',
+        icon: '🧪',
+        category: 'sec',
+        categoryLabel: 'ICS SECURITY',
+        difficulty: 'Hard',
+        desc: 'Deploy passive OT threat detection to expose a rogue Modbus master injecting false telemetry.',
+        objective: 'A rogue workstation is masquerading as the plant master console. Passive-profile the network, identify the attacker IP, and apply block ACLs.',
+        tasks: [
+          'Access Claroty Continuous Threat Sensor diagnostic shell.',
+          'Audit discovered assets to isolate unlisted active IP protocols.',
+          'Block the malicious IP segment using target firewall drop rules.'
+        ],
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, how can I locate a rogue Modbus master? Show me how to passive-profile assets using Claroty or Wireshark!'
+      },
+      {
+        id: 'lab-21',
+        title: 'Claroty Passive OT Profiling',
+        icon: '📡',
+        category: 'sec',
+        categoryLabel: 'OT MONITORING',
+        difficulty: 'Medium',
+        desc: 'Configure deep packet inspection rules to build an automated, secure asset baseline.',
+        objective: 'The plant lacks a centralized OT asset ledger. Spin up deep packet parsing on the Claroty CT-100 to index all S7comm and CIP hardware.',
+        tasks: [
+          'Enable passive deep packet inspection (DPI) protocol engines.',
+          'Run "show assets" in the Claroty sensor console to build baseline records.',
+          'Verify S7, CIP, and Modbus hardware modules are accurately categorized.'
+        ],
+        projectType: 'purdue',
+        coDriverPayload: 'Aetheris Co-Driver, show me how to baseline OT protocols using deep packet analysis and passive span monitors!'
+      },
+      {
+        id: 'lab-22',
+        title: 'Data Diode Optical Segregation',
+        icon: '🛡',
+        category: 'sec',
+        categoryLabel: 'ICS CONTROL',
+        difficulty: 'Medium',
+        desc: 'Configure optical data diode transfer proxy rules to allow outbound telemetry while isolating incoming ports.',
+        objective: 'A bidirectional gateway connects the safe OT network to the corporate LAN. Swap this with an optical data diode to enforce complete hardware isolation.',
+        tasks: [
+          'Verify fiber laser alignment states on Owl Unidirectional Gateway.',
+          'Configure Syslog TCP mapping rules to mirror telemetry logs to the IT subnet.',
+          'Confirm that all return traffic attempts from the corporate network are physically dropped.'
+        ],
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, explain data diode optical isolation. Show me the commands to sync outbound proxy logs securely!'
+      },
+      {
+        id: 'lab-23',
+        title: 'AD Kerberoasting Threat Hunt',
+        icon: '🕵',
+        category: 'sec',
+        categoryLabel: 'SERVICES',
+        difficulty: 'Medium',
+        desc: 'Audit domain controller ticket requests to identify offline password cracking attempts.',
+        objective: 'An adversary has compromised an access node and is requesting Kerberos Service Principal Names (SPNs) tickets. Secure the AD database.',
+        tasks: [
+          'Inspect Kerberos TGS request volumes in AD logs.',
+          'Identify domain service accounts configured with weak encryption (RC4).',
+          'Enforce strict AES-256 ticket requirements on domain parameters.'
+        ],
+        projectType: 'campus',
+        coDriverPayload: 'Aetheris Co-Driver, show me how to detect AD Kerberoasting sweeps and secure service accounts with strong cryptography!'
+      },
+      {
+        id: 'lab-24',
+        title: 'PowerFlex VFD Frequency Tuning',
+        icon: '⚡',
+        category: 'critical',
+        categoryLabel: 'ICS CONTROL',
+        difficulty: 'Medium',
+        desc: 'Calibrate variable frequency drive motor limits to prevent electrical overload.',
+        objective: 'Incorrect motor acceleration parameters are creating active overcurrent faults. Tweak internal drive parameters via the CLI.',
+        tasks: [
+          'Query current motor telemetry using show parameters.',
+          'Set motor acceleration ramp register to 3.5 seconds.',
+          'Verify frequency sweeps operate within healthy RPM ranges.'
+        ],
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, explain how VFD speed curves and acceleration values affect power load. Provide the VFD calibration CLI commands!'
+      },
+      {
+        id: 'lab-25',
+        title: 'SCADA Tag Sync Verification',
+        icon: '📊',
+        category: 'infra',
+        categoryLabel: 'SERVICES',
+        difficulty: 'Easy',
+        desc: 'Align SCADA database Ignition tag paths with live Modbus PLC hardware register mappings.',
+        objective: 'SCADA telemetry widgets show mismatched temperature values due to an OPC tag scaling fault. Recalibrate the HMI tag paths.',
+        tasks: [
+          'Dump current active database mappings via show tag-db command.',
+          'Align SCADA Reactor3 tag target registry with holding register 40001.',
+          'Verify telemetry charts show correct scaled temperatures.'
+        ],
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, guide me in configuring HMI OPC database tag scaling to align 16-bit integers with active float variables!'
+      },
+      {
+        id: 'lab-26',
+        title: 'ARP Spoof MitM Analysis',
+        icon: '🔍',
+        category: 'sec',
+        categoryLabel: 'ICS SECURITY',
+        difficulty: 'Medium',
+        desc: 'Intercept unencrypted OT traffic via spoofed ARP responses and audit packets with Wireshark.',
+        objective: 'Verify vulnerability of the network to local MitM. Spoof local ARP tables, direct SCADA streams through a passive audit console, and analyze Modbus headers.',
+        tasks: [
+          'Initialize local packet tap redirection on the intermediate switch.',
+          'Examine captured raw packets for duplicate IP-MAC bindings.',
+          'Activate dynamic ARP inspection (DAI) on switches to completely mitigate ARP poisoning.'
+        ],
+        projectType: 'campus',
+        coDriverPayload: 'Aetheris Co-Driver, walk me through ARP cache poisoning mitigation using switch DAI configurations and binding matrices!'
+      },
+      {
+        id: 'lab-27',
+        title: 'SNMPv3 Encrypted Monitoring',
+        icon: '🎛',
+        category: 'infra',
+        categoryLabel: 'SERVICES',
+        difficulty: 'Easy',
+        desc: 'Replace legacy unsecure telemetry monitors with encrypted SNMPv3 profiles.',
+        objective: 'Plant monitoring uses unencrypted SNMPv1 exposing administrator community strings. Reconfigure SNMP using SHA authentication and AES encryption.',
+        tasks: [
+          'Remove insecure legacy SNMP community strings from PE-01 and CE-01.',
+          'Configure SNMPv3 user profiles with strict auth/priv permissions.',
+          'Verify remote monitoring consoles can parse system SNMP variables securely.'
+        ],
+        projectType: 'campus',
+        coDriverPayload: 'Aetheris Co-Driver, provide the Cisco IOS SNMPv3 configuration commands to establish authenticated and encrypted node profiles!'
+      },
+      {
+        id: 'lab-28',
+        title: 'SIS Pressure Vessel Emergency ESD',
+        icon: '☣',
+        category: 'critical',
+        categoryLabel: 'ICS CONTROL',
+        difficulty: 'Hard',
+        desc: 'Simulate high-pressure steam runaway and execute safety-instrumented shutdown logic.',
+        objective: 'Under extreme vessel pressure runaway, bypass automatic controllers and initiate an active emergency shutdown (ESD) sweep to vent the boiler.',
+        tasks: [
+          'Verify TMR consensus is verified 3-out-of-3 on Triconex SIS.',
+          'Execute direct write command to override the ESD interlock loops.',
+          'Confirm core steam valves immediately fail-safe to venting position.'
+        ],
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, detail Triconex Safety ESD trip sequences and consensus voting mechanics during steam runaway overrides!'
+      },
+      {
+        id: 'lab-29',
+        title: 'Hydra SSH Credential Audit',
+        icon: '⚔',
+        category: 'sec',
+        categoryLabel: 'THREAT DEFENSE',
+        difficulty: 'Medium',
+        desc: 'Perform stress-testing on remote administrative terminals to verify brute-force protection controls.',
+        objective: 'Verify password complexity policies and active SSH lockouts on core switches. Run password auditing sweeps and observe system logs.',
+        tasks: [
+          'Initiate ssh credential test sweeps to the distribution switch interface.',
+          'Confirm that access control lists limit brute-force rates.',
+          'Enable strict SSH connection limits and login block-time settings.'
+        ],
+        projectType: 'campus',
+        coDriverPayload: 'Aetheris Co-Driver, outline SSH login protection policies and CLI rate-limiting configurations on Cisco IOS switches!'
+      },
+      {
+        id: 'lab-30',
+        title: 'IEEE 802.1X Access Security',
+        icon: '🔌',
+        category: 'sec',
+        categoryLabel: 'THREAT DEFENSE',
+        difficulty: 'Hard',
+        desc: 'Configure port authentication parameters to isolate unauthorized user hardware.',
+        objective: 'Unauthorized workstations are plugging directly into distribution panels. Activate 802.1X port security and authenticate nodes using RADIUS parameters.',
+        tasks: [
+          'Enable "dot1x system-auth-control" globally on access switches.',
+          'Configure switch interfaces to require authentications.',
+          'Confirm that unauthorized hardware nodes are immediately redirected to Guest VLAN segments.'
+        ],
+        projectType: 'campus',
+        coDriverPayload: 'Aetheris Co-Driver, provide the complete switch configuration to enforce IEEE 802.1X authentication using RADIUS profiles!'
+      },
+      {
+        id: 'lab-31',
+        title: 'HSRP Core Redundancy Failover',
+        icon: '🌐',
+        category: 'infra',
+        categoryLabel: 'OSPF CORE',
+        difficulty: 'Medium',
+        desc: 'Establish high-availability gateway paths to prevent server link drops.',
+        objective: 'A single gateway crash will isolate the plant floor. Deploy HSRP across distribution switch gates to establish a redundant virtual gateway.',
+        tasks: [
+          'Configure HSRP Group 10 on active distribution interfaces.',
+          'Establish a redundant virtual gateway IP address (10.1.10.254).',
+          'Optimize HSRP priority states to enforce fail-safe secondary transitions.'
+        ],
+        projectType: 'campus',
+        coDriverPayload: 'Aetheris Co-Driver, show me the HSRP configuration commands to configure primary and secondary hot-standby router gateways!'
       }
     ];
 

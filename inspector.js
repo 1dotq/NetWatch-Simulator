@@ -234,33 +234,34 @@ class DeviceInspector {
         ctx.strokeRect(sx, sy, slotW, sh);
 
         // Modular header accent
-        ctx.fillStyle = s === 0 ? '#0284c7' : s === 1 ? '#059669' : '#d97706';
+        const isSis = role.includes('sis');
+        ctx.fillStyle = isSis ? '#ea580c' : (s === 0 ? '#0284c7' : s === 1 ? '#059669' : '#d97706');
         ctx.fillRect(sx + 2, sy + 2, slotW - 4, 6);
 
         if (s === 0) {
           // CPU Module: draw screen
           ctx.fillStyle = '#1e293b';
           ctx.fillRect(sx + 8, sy + 20, slotW - 16, 40);
-          ctx.strokeStyle = '#38bdf8';
+          ctx.strokeStyle = isSis ? '#f97316' : '#38bdf8';
           ctx.strokeRect(sx + 8, sy + 20, slotW - 16, 40);
 
-          ctx.fillStyle = '#22c55e';
+          ctx.fillStyle = isSis ? '#ea580c' : '#22c55e';
           ctx.font = 'bold 7px Fira Code, monospace';
-          ctx.fillText("RUN", sx + 14, sy + 32);
+          ctx.fillText(isSis ? "SAFE" : "RUN", sx + 14, sy + 32);
           ctx.fillStyle = '#cbd5e1';
           ctx.font = '6px Fira Code, monospace';
           ctx.fillText(node.id, sx + 14, sy + 44);
-          ctx.fillText("MODBUS OK", sx + 14, sy + 52);
+          ctx.fillText(isSis ? "SIS ACTIVE" : "MODBUS OK", sx + 14, sy + 52);
 
           // LED matrix
           for (let l = 0; l < 4; l++) {
-            ctx.fillStyle = l === 3 ? '#374151' : '#22c55e';
+            ctx.fillStyle = l === 3 ? (isSis ? '#22c55e' : '#374151') : (isSis ? '#ea580c' : '#22c55e');
             ctx.beginPath();
             ctx.arc(sx + 14 + l * 16, sy + 74, 3, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = '#64748b';
             ctx.font = '5px Fira Code, monospace';
-            ctx.fillText(['PWR','SYS','RUN','ALM'][l], sx + 8 + l * 16, sy + 84);
+            ctx.fillText(isSis ? ['PWR','SYS','SIL','ESD'][l] : ['PWR','SYS','RUN','ALM'][l], sx + 8 + l * 16, sy + 84);
           }
         } else {
           // I/O Terminal Modules: draw screw terminals
@@ -556,36 +557,103 @@ class DeviceInspector {
       ctx.font = 'bold 8px Fira Code, monospace';
       ctx.fillText(node.name.toUpperCase(), 16, 26);
 
-    } else {
       // ----------------------------------------------------
-      // RACKMOUNT CISCO NETWORK SWITCH / ROUTER / FIREWALL
+      // RACKMOUNT NETWORK INTERFACE / DATA DIODE / SWITCH
       // ----------------------------------------------------
+      const isDiode = role.includes('diode');
+
       // Dark chassis background
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = 'rgba(56,189,248,0.3)';
+      ctx.strokeStyle = isDiode ? 'rgba(168,85,247,0.4)' : 'rgba(56,189,248,0.3)';
       ctx.lineWidth = 2;
       ctx.roundRect(4, 4, W-8, H-8, 6);
       ctx.stroke();
 
-      // Honeycomb/line ventilation slots on the left
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 2;
-      for (let v = 0; v < 8; v++) {
+      if (isDiode) {
+        // ── OWL DATA DIODE CHASSIS ──
+        // Draw steel plate separator in the middle
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(W/2 - 4, 10, 8, H - 20);
+        ctx.strokeStyle = '#475569';
+        ctx.strokeRect(W/2 - 4, 10, 8, H - 20);
+
+        // Left section: TX (Transmit Side)
+        ctx.fillStyle = 'rgba(34,197,94,0.06)';
+        ctx.fillRect(10, 10, W/2 - 14, H - 20);
+        
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 8px Fira Code, monospace';
+        ctx.fillText("TRANSMIT INTERFACE [TX]", 16, 24);
+        ctx.fillStyle = '#64748b';
+        ctx.font = '6px Fira Code, monospace';
+        ctx.fillText("PHYSICAL OPTICAL INLET", 16, 34);
+
+        // Right section: RX (Receive Side)
+        ctx.fillStyle = 'rgba(239,68,68,0.04)';
+        ctx.fillRect(W/2 + 4, 10, W/2 - 14, H - 20);
+
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 8px Fira Code, monospace';
+        ctx.fillText("RECEIVE INTERFACE [RX]", W/2 + 12, 24);
+        ctx.fillStyle = '#64748b';
+        ctx.font = '6px Fira Code, monospace';
+        ctx.fillText("PHYSICAL OPTICAL OUTLET", W/2 + 12, 34);
+
+        // Unidirectional Flow Arrows in the center
+        ctx.fillStyle = '#a855f7';
+        ctx.font = 'bold 20px Fira Code, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText("➜", W/2, H/2 + 6);
+        ctx.font = 'bold 5px Fira Code, monospace';
+        ctx.fillText("ONE-WAY", W/2, H/2 + 18);
+        ctx.fillText("FLOW", W/2, H/2 + 25);
+        ctx.textAlign = 'left';
+
+        // Fiber optic port visuals on left (TX)
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(20, H/2 - 10, 30, 20);
+        ctx.strokeStyle = '#22c55e';
+        ctx.strokeRect(20, H/2 - 10, 30, 20);
+        ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.moveTo(W - 45, 20 + v * 6);
-        ctx.lineTo(W - 15, 20 + v * 6);
-        ctx.stroke();
+        ctx.arc(35, H/2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fiber optic port visuals on right (RX)
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(W - 50, H/2 - 10, 30, 20);
+        ctx.strokeStyle = '#ef4444';
+        ctx.strokeRect(W - 50, H/2 - 10, 30, 20);
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(W - 35, H/2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Brand details at bottom
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = 'bold 8px Fira Code, monospace';
+        ctx.fillText("OWL CYBER DATA DIODE v8.3", 16, H - 20);
+      } else {
+        // Honeycomb/line ventilation slots on the left
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 2;
+        for (let v = 0; v < 8; v++) {
+          ctx.beginPath();
+          ctx.moveTo(W - 45, 20 + v * 6);
+          ctx.lineTo(W - 15, 20 + v * 6);
+          ctx.stroke();
+        }
+
+        // Brand labels
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 9px Fira Code, monospace';
+        ctx.fillText((node.os || node.role || 'DEVICE').toUpperCase().substring(0, 20), 14, 22);
+
+        ctx.fillStyle = '#64748b';
+        ctx.font = '8px Fira Code, monospace';
+        ctx.fillText(node.firmware || 'v1.0', 14, 35);
       }
-
-      // Brand labels
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 9px Fira Code, monospace';
-      ctx.fillText((node.os || node.role || 'DEVICE').toUpperCase().substring(0, 20), 14, 22);
-
-      ctx.fillStyle = '#64748b';
-      ctx.font = '8px Fira Code, monospace';
-      ctx.fillText(node.firmware || 'v1.0', 14, 35);
 
       // Glowing multi-port Ethernet panel (Switch / Router style)
       const config = this.app.getNodeConfig(node);

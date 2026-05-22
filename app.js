@@ -3701,6 +3701,12 @@ class DigitalTwinApp {
       case 'actuator':
         role = "Field Actuator"; os = "EtherNet/IP RTOS"; icon = "valve"; firmware = "v2.4.1"; idPrefix = "ACT"; defaultIp = "192.168.10.50";
         break;
+      case 'sis-controller':
+        role = "SIS Controller"; os = "Triconex Safety OS"; icon = "plc"; firmware = "v11.5"; idPrefix = "SIS"; defaultIp = "192.168.99.10";
+        break;
+      case 'vfd-drive':
+        role = "VFD Motor Drive"; os = "Allen-Bradley PowerFlex"; icon = "valve"; firmware = "v6.002"; idPrefix = "VFD"; defaultIp = "192.168.10.60";
+        break;
       // ── Security ──
       case 'paloalto-fw':
         role = "Firewall"; os = "Palo Alto PAN-OS"; icon = "firewall"; firmware = "11.0.3"; idPrefix = "PALO"; defaultIp = "10.0.0.1";
@@ -3716,6 +3722,12 @@ class DigitalTwinApp {
         break;
       case 'wireshark-tap':
         role = "Packet Tap"; os = "SPAN / Mirror Probe"; icon = "workstation"; firmware = "WireShark 4.2"; idPrefix = "TAP"; defaultIp = "192.168.255.1";
+        break;
+      case 'data-diode':
+        role = "Data Diode"; os = "Owl Cyber Diode OS"; icon = "firewall"; firmware = "v8.3"; idPrefix = "DIODE"; defaultIp = "192.168.5.1";
+        break;
+      case 'claroty-ids':
+        role = "OT Security Sensor"; os = "Claroty CT-100"; icon = "workstation"; firmware = "v4.6.1"; idPrefix = "CLAROTY"; defaultIp = "192.168.100.5";
         break;
     }
 

@@ -2059,6 +2059,466 @@ class DigitalTwinApp {
     this.printCLILine(`Modbus write payload executed. Coil 0000${coilIdStr} set to ${state ? '1' : '0'}.`, 'success');
   }
 
+  executeIndustrialCLI(cmd, node, args, baseCmd) {
+    const role = (node.role || '').toLowerCase();
+    const config = this.getNodeConfig(node);
+
+    // 1. PLC Controller Shell (Siemens, Allen-Bradley)
+    if (role.includes('plc') || role.includes('controller') || role.includes('rtu')) {
+      if (baseCmd === 'help' || baseCmd === '?') {
+        this.printCLILine(`Industrial Controller CLI Shell (Modbus TCP & Industrial Ethernet)`, 'success');
+        this.printCLILine(`Available Device Commands:`);
+        this.printCLILine(`  help / ?                      Show this industrial control help screen.`);
+        this.printCLILine(`  show modbus                   Dump holding registers and coils state.`);
+        this.printCLILine(`  read coil [ADDR]              Read Modbus coil discrete output (0-9999).`);
+        this.printCLILine(`  write coil [ADDR] [0/1]       Write Modbus coil state (solenoid/relay override).`);
+        this.printCLILine(`  read register [ADDR]          Read 16-bit analog holding register (40001-49999).`);
+        this.printCLILine(`  write register [ADDR] [VAL]   Write holding register value.`);
+        this.printCLILine(`  show state                    Display PLC CPU CPU state (RUN / STOP).`);
+        this.printCLILine(`  mode [run/stop]               Force CPU runtime processor state.`);
+        this.printCLILine(`  show modules                  List modular S7/Logix rack hardware cards.`);
+        this.printCLILine(`  show diagnostic-buffer        Print PLC local operational system logs.`);
+        this.printCLILine(`  ping [IP/Node]                Test industrial network path connectivity.`);
+        this.printCLILine(`  clear                         Clear CLI terminal screen buffer.`);
+        return;
+      }
+
+      if (baseCmd === 'show') {
+        const sub = (args[1] || '').toLowerCase();
+        if (sub === 'modbus') {
+          this.printCLILine(`MODBUS TCP REGISTRY SUMMARY (Address Base 0)`, 'success');
+          this.printCLILine(`COILS (Discrete Outputs):`);
+          this.printCLILine(`  00001: ${node.id === 'SIS-01' ? '1 (Safety Lock)' : (this.coil1 ? '1 (FORCED)' : '0 (AUTO)')} [Safety Loop Valve Control]`);
+          this.printCLILine(`  00002: ${this.coil2 ? '1' : '0'} [System Standby bypass]`);
+          this.printCLILine(`HOLDING REGISTERS (Analog Inputs/Outputs):`);
+          this.printCLILine(`  40001: ${this.physicsSim?.rpm || 1780} [Generator Rotor RPM]`);
+          this.printCLILine(`  40002: ${this.physicsSim?.frequency?.toFixed(2) || '60.00'} Hz [Turbine Active Frequency]`);
+          this.printCLILine(`  40003: ${this.physicsSim?.temperature?.toFixed(1) || '38.5'} C [Reactor Core Temp]`);
+          this.printCLILine(`  40004: ${this.physicsSim?.pressure?.toFixed(1) || '14.7'} psi [Reactor Vessel Pressure]`);
+          return;
+        }
+        if (sub === 'state') {
+          this.printCLILine(`PLC CPU State: RUN`, 'success');
+          this.printCLILine(`Program loaded: MainIndustrialLoop.hex`);
+          this.printCLILine(`Scan Time: 12ms`);
+          this.printCLILine(`Safety Interlocks: ACTIVE`);
+          return;
+        }
+        if (sub === 'modules') {
+          this.printCLILine(`S7 Modular Hardware Rack Inventory (Chassis Slot 0):`, 'success');
+          this.printCLILine(`  Slot 0: PS 407 (10A Power Supply module)`);
+          this.printCLILine(`  Slot 1: CPU 1516-3 (High-performance safety automation processor)`);
+          this.printCLILine(`  Slot 2: CP 1543-1 (Industrial Ethernet security network processor)`);
+          this.printCLILine(`  Slot 3: DI 16x24VDC (16-channel Digital Input signal card)`);
+          this.printCLILine(`  Slot 4: AI 8xU/I/RTD/TC (8-channel high-fidelity Analog Input sensor card)`);
+          return;
+        }
+        if (sub === 'diagnostic-buffer' || sub === 'diagnostic') {
+          this.printCLILine(`PLC DIAGNOSTIC SYSTEM LOG (S7-EventLog):`, 'success');
+          this.printCLILine(`  [2026-05-22 17:04:12] Event ID 0x1302: CPU changed state from STOP to RUN (Key Switch)`);
+          this.printCLILine(`  [2026-05-22 17:04:12] Event ID 0x3841: Modbus Server daemon initialized on Port 502`);
+          this.printCLILine(`  [2026-05-22 17:15:33] Event ID 0x4890: Optical link synchronized on Interface Profinet0/1`);
+          this.printCLILine(`  [2026-05-22 18:01:05] Event ID 0x2791: Holding register 40001 (RPM) exceeded warning threshold`);
+          return;
+        }
+      }
+
+      if (baseCmd === 'mode') {
+        const state = (args[1] || '').toLowerCase();
+        if (state === 'run' || state === 'stop') {
+          this.printCLILine(`PLC CPU command accepted. Changing processor mode to ${state.toUpperCase()}...`, 'success');
+          this.orchestrator.logSystem(`PLC controller state set to ${state.toUpperCase()} via direct interface execution.`, 'info');
+        } else {
+          this.printCLILine(`% Usage: mode [run/stop]`, 'error-line');
+        }
+        return;
+      }
+
+      if (baseCmd === 'read') {
+        const type = (args[1] || '').toLowerCase();
+        const addr = args[2];
+        if (!type || !addr) {
+          this.printCLILine(`% Usage: read [coil/register] [ADDRESS]`, 'error-line');
+          return;
+        }
+        if (type === 'coil') {
+          this.printCLILine(`Modbus Query success: Coil ${addr} is currently: ${this.coil1 ? 'ON (1)' : 'OFF (0)'}`);
+        } else if (type === 'register') {
+          this.printCLILine(`Modbus Query success: Register ${addr} value is currently: ${this.physicsSim?.rpm || 1780}`);
+        } else {
+          this.printCLILine(`% Invalid query type: choose 'coil' or 'register'`, 'error-line');
+        }
+        return;
+      }
+
+      if (baseCmd === 'write') {
+        const type = (args[1] || '').toLowerCase();
+        const addr = args[2];
+        const val = args[3];
+        if (!type || !addr || val === undefined) {
+          this.printCLILine(`% Usage: write [coil/register] [ADDRESS] [VALUE]`, 'error-line');
+          return;
+        }
+        if (type === 'coil') {
+          const state = val === '1' || val.toLowerCase() === 'on';
+          this.executePLCForce(addr, state);
+        } else if (type === 'register') {
+          this.printCLILine(`Modbus Register Force success: Register ${addr} set to ${val}.`, 'success');
+          this.orchestrator.logSystem(`Modbus register ${addr} forced to ${val} via raw CLI payload.`, 'warning');
+        } else {
+          this.printCLILine(`% Invalid command type.`, 'error-line');
+        }
+        return;
+      }
+    }
+
+    // 2. SCADA HMI Shell
+    if (role.includes('hmi') || role.includes('scada')) {
+      if (baseCmd === 'help' || baseCmd === '?') {
+        this.printCLILine(`Ignition SCADA HMI Operator Console Shell`, 'success');
+        this.printCLILine(`Available Gateway Commands:`);
+        this.printCLILine(`  help / ?                      Show this SCADA administrator help.`);
+        this.printCLILine(`  show tag-db                   Dump SCADA Tag Database paths, types, and values.`);
+        this.printCLILine(`  set tag [TAG_PATH] [VAL]      Manually override active SCADA system tag value.`);
+        this.printCLILine(`  show opc-connections          Display real-time industrial PLC OPC server link statuses.`);
+        this.printCLILine(`  show client-sessions          Show currently active web browser dashboard sessions.`);
+        this.printCLILine(`  show alarm-history            Print historical SCADA telemetry critical alarms.`);
+        this.printCLILine(`  ping [IP/Node]                Test connection to plant routers or controllers.`);
+        this.printCLILine(`  clear                         Clear CLI log logs.`);
+        return;
+      }
+
+      if (baseCmd === 'show') {
+        const sub = (args[1] || '').toLowerCase();
+        if (sub === 'tags' || sub === 'tag-db') {
+          this.printCLILine(`SCADA TAG ENGINE DATABASE (Ignition OPC Gateway Pathing):`, 'success');
+          this.printCLILine(`----------------------------------------------------------------------`);
+          this.printCLILine(`TAG PATH                           | VALUE      | TYPE    | STATE`);
+          this.printCLILine(`----------------------------------------------------------------------`);
+          this.printCLILine(`Reactor3/CoolingValve/FlowOpening  | ${this.physicsSim?.flowRate?.toFixed(1) || '45.0'}%       | Float   | Good (OPC UA)`);
+          this.printCLILine(`Reactor3/Physical/TemperatureC     | ${this.physicsSim?.temperature?.toFixed(1) || '38.5'} C     | Float   | Good (OPC UA)`);
+          this.printCLILine(`Reactor3/Physical/PressurePsi      | ${this.physicsSim?.pressure?.toFixed(1) || '14.7'} psi    | Float   | Good (OPC UA)`);
+          this.printCLILine(`Reactor3/Generator/RotorRPM        | ${this.physicsSim?.rpm || 1780}        | Integer | Good (Modbus)`);
+          this.printCLILine(`Reactor3/SafetyLoop/InterlockTrip  | FALSE      | Boolean | Good (Safety Suite)`);
+          this.printCLILine(`----------------------------------------------------------------------`);
+          return;
+        }
+        if (sub === 'opc-connections' || sub === 'opc') {
+          this.printCLILine(`ACTIVE OPC GATEWAY CLIENT CONNECTIONS:`, 'success');
+          this.printCLILine(`  Connection 1: opc.tcp://192.168.10.20:4840 [Siemens S7-01] -> ONLINE (Lat 4ms)`);
+          this.printCLILine(`  Connection 2: opc.tcp://192.168.10.21:4840 [Allen-Bradley AB-01] -> ONLINE (Lat 6ms)`);
+          this.printCLILine(`  Connection 3: opc.tcp://192.168.99.10:4840 [Triconex SIS-01] -> ONLINE (Secure Loop)`);
+          return;
+        }
+        if (sub === 'client-sessions' || sub === 'sessions') {
+          this.printCLILine(`ACTIVE OPERATOR DASHBOARD SESSIONS:`, 'success');
+          this.printCLILine(`  Client #1 (Desktop 10.1.10.102): Active SCADA operator screen (Zone: IT Control Room)`);
+          this.printCLILine(`  Client #2 (HMI Panel Level 1): Local touch-screen panel (Zone: Generator Floor)`);
+          return;
+        }
+        if (sub === 'alarm-history' || sub === 'alarms') {
+          this.printCLILine(`ACTIVE GATEWAY SYSTEM ALARMS:`, 'success');
+          this.printCLILine(`  NO ACTIVE TRIPS - Physical plant safety parameters are within normal standard thresholds.`);
+          return;
+        }
+      }
+
+      if (baseCmd === 'set') {
+        const sub = args[1];
+        const val = args[2];
+        if (sub !== 'tag' || !val) {
+          this.printCLILine(`% Usage: set tag [TAG_PATH] [VALUE]`, 'error-line');
+          return;
+        }
+        const path = args[2];
+        const valReal = args[3];
+        if (!path || valReal === undefined) {
+          this.printCLILine(`% Usage: set tag [TAG_PATH] [VALUE]`, 'error-line');
+          return;
+        }
+        this.printCLILine(`SCADA DB override: Tag [${path}] successfully set to [${valReal}].`, 'success');
+        this.orchestrator.logSystem(`SCADA HMI database forced tag [${path}] to [${valReal}] via direct dashboard session.`, 'warning');
+        return;
+      }
+    }
+
+    // 3. Actuator Valve / VFD Motor Drive Shell
+    if (role.includes('actuator') || role.includes('valve') || role.includes('drive') || role.includes('vfd')) {
+      if (baseCmd === 'help' || baseCmd === '?') {
+        this.printCLILine(`Smart Field Actuator & Motor Drive Controller Shell`, 'success');
+        this.printCLILine(`Available Hardware Commands:`);
+        this.printCLILine(`  help / ?                      Show this field actuator diagnostics help.`);
+        this.printCLILine(`  show telemetry                Dump live sensor telemetry (RPM, Voltage, temperature).`);
+        this.printCLILine(`  set target [VAL]              Set target frequency (0-60 Hz) or valve opening (0-100%).`);
+        this.printCLILine(`  force override [on/off]       Manually override process feedback control loop.`);
+        this.printCLILine(`  show parameters               Print operational ramp calibration constants.`);
+        this.printCLILine(`  show faults                   Inspect active drive fault diagnostics.`);
+        this.printCLILine(`  ping [IP]                     Test interface connectivity.`);
+        this.printCLILine(`  clear                         Clear CLI logs.`);
+        return;
+      }
+
+      if (baseCmd === 'show') {
+        const sub = (args[1] || '').toLowerCase();
+        if (sub === 'telemetry') {
+          const isVfd = role.includes('vfd') || role.includes('drive');
+          this.printCLILine(`FIELD COMPONENT OPERATIONAL TELEMETRY:`, 'success');
+          if (isVfd) {
+            this.printCLILine(`  Motor Output Frequency : ${this.physicsSim?.frequency?.toFixed(2) || '60.00'} Hz`);
+            this.printCLILine(`  Motor Torque Speed     : ${this.physicsSim?.rpm || 1780} RPM`);
+            this.printCLILine(`  Output Voltage         : 460.2 VAC (Active Phase)`);
+            this.printCLILine(`  Thermal Core Temp      : 42.1 C`);
+          } else {
+            this.printCLILine(`  Solenoid Valve Opening : ${this.physicsSim?.flowRate?.toFixed(1) || '45.0'}%`);
+            this.printCLILine(`  Actual Fluid Flow Rate : ${(this.physicsSim?.flowRate || 45.0) * 0.8} GPM [Gallons Per Min]`);
+            this.printCLILine(`  Inlet Valve Pressure   : 65.4 PSI`);
+            this.printCLILine(`  Relay Coil Voltage     : 24 VDC (High state)`);
+          }
+          return;
+        }
+        if (sub === 'parameters' || sub === 'params') {
+          this.printCLILine(`CONTROLLER RAMP CONSTANTS (EPROM Registers):`, 'success');
+          this.printCLILine(`  Parameter 101 (Acceleration Time) : 2.5 seconds`);
+          this.printCLILine(`  Parameter 102 (Deceleration Time) : 3.0 seconds`);
+          this.printCLILine(`  Parameter 105 (Overcurrent Limit) : 150% maximum load`);
+          this.printCLILine(`  Parameter 110 (Low Speed Cutoff)  : 5.0 Hz`);
+          return;
+        }
+        if (sub === 'faults') {
+          this.printCLILine(`VFD/ACTUATOR MEMORY ALARM CODES:`, 'success');
+          this.printCLILine(`  F0000: NO FAULTS ACTIVE - System operational and executing normal feedback loop.`);
+          return;
+        }
+      }
+
+      if (baseCmd === 'set') {
+        const sub = (args[1] || '').toLowerCase();
+        const val = args[2];
+        if (sub !== 'target' || !val) {
+          this.printCLILine(`% Usage: set target [VALUE]`, 'error-line');
+          return;
+        }
+        const valNum = parseFloat(val);
+        if (isNaN(valNum)) {
+          this.printCLILine(`% Invalid numerical value`, 'error-line');
+          return;
+        }
+        this.printCLILine(`Physical component register target updated. Set target output to [${valNum}].`, 'success');
+        this.orchestrator.logSystem(`Smart actuator target value forced to ${valNum} via direct CLI shell register update.`, 'warning');
+        return;
+      }
+
+      if (baseCmd === 'force') {
+        const sub = (args[1] || '').toLowerCase();
+        const state = (args[2] || '').toLowerCase();
+        if (sub !== 'override' || (state !== 'on' && state !== 'off')) {
+          this.printCLILine(`% Usage: force override [on/off]`, 'error-line');
+          return;
+        }
+        this.printCLILine(`Local actuator manual override set to: ${state.toUpperCase()}`, 'success');
+        this.orchestrator.logSystem(`Actuator local override set to ${state.toUpperCase()} via CLI.`, 'warning');
+        return;
+      }
+    }
+
+    // 4. Triconex Safety Instrumented System (SIS)
+    if (role.includes('sis') || role.includes('safety')) {
+      if (baseCmd === 'help' || baseCmd === '?') {
+        this.printCLILine(`Triconex Triple-Modular Redundant (TMR) Safety Controller Shell`, 'success');
+        this.printCLILine(`Available Safety Suite Commands:`);
+        this.printCLILine(`  help / ?                      Show this Triconex diagnostic loop menu.`);
+        this.printCLILine(`  show tmr-status               Read voters status (Channel A, B, C health).`);
+        this.printCLILine(`  show safety-loops             Dump critical ESD (Emergency Shutdown) interlock loops.`);
+        this.printCLILine(`  show bypass-status            List active pressure/thermal sensor safety bypasses.`);
+        this.printCLILine(`  set bypass [LOOP] [on/off]    Force loop safety bypass toggle.`);
+        this.printCLILine(`  show key-switch               Inspect key-switch position (RUN/PROGRAM/STOP).`);
+        this.printCLILine(`  show trip-history             Print structural emergency plant trip logs.`);
+        this.printCLILine(`  ping [IP]                     Test pathway connectivity.`);
+        this.printCLILine(`  clear                         Clear CLI logs.`);
+        return;
+      }
+
+      if (baseCmd === 'show') {
+        const sub = (args[1] || '').toLowerCase();
+        if (sub === 'tmr-status' || sub === 'tmr') {
+          this.printCLILine(`TRICONEX TMR VOTING SYSTEM INTEGRITY REPORT:`, 'success');
+          this.printCLILine(`  Module CPU-A: ONLINE // HEALTHY // SYNCED [Voter consensus: YES]`);
+          this.printCLILine(`  Module CPU-B: ONLINE // HEALTHY // SYNCED [Voter consensus: YES]`);
+          this.printCLILine(`  Module CPU-C: ONLINE // HEALTHY // SYNCED [Voter consensus: YES]`);
+          this.printCLILine(`  Consensus State: Triple-Modular Consensus Verified (3-out-of-3)`);
+          return;
+        }
+        if (sub === 'safety-loops' || sub === 'loops') {
+          this.printCLILine(`CRITICAL ESD SAFETY LOOPS STATUS:`, 'success');
+          this.printCLILine(`-----------------------------------------------------------------`);
+          this.printCLILine(`LOOP ID | NAME             | SENSOR VALUE | ESD TRIP VAL | STATE`);
+          this.printCLILine(`-----------------------------------------------------------------`);
+          this.printCLILine(`LP-001  | Reactor Pressure | 14.7 psi     | 250.0 psi    | NORMAL`);
+          this.printCLILine(`LP-002  | Reactor Temp     | 38.5 C       | 150.0 C      | NORMAL`);
+          this.printCLILine(`LP-003  | Generator RPM    | 1780 RPM     | 3600 RPM     | NORMAL`);
+          this.printCLILine(`-----------------------------------------------------------------`);
+          return;
+        }
+        if (sub === 'bypass-status' || sub === 'bypass') {
+          this.printCLILine(`ACTIVE SAFETY LOOP SENSOR BYPASSES:`, 'success');
+          this.printCLILine(`  No loop bypasses configured. Safety voters are actively monitoring raw sensor telemetry.`);
+          return;
+        }
+        if (sub === 'key-switch' || sub === 'key') {
+          this.printCLILine(`Triconex Key-Switch State: RUN`, 'success');
+          this.printCLILine(`Memory protected. Configurations cannot be pushed unless switched to PROGRAM.`);
+          return;
+        }
+        if (sub === 'trip-history' || sub === 'trip') {
+          this.printCLILine(`SAFETY TRIP EVENT JOURNAL:`, 'success');
+          this.printCLILine(`  [2026-05-21 04:33:12] SYSTEM STARTUP CONSENSUS VERIFIED`);
+          this.printCLILine(`  [2026-05-22 17:01:45] DI PROFIBUS SYNC SUCCESS - TMR ACTIVE`);
+          return;
+        }
+      }
+
+      if (baseCmd === 'set') {
+        const sub = (args[1] || '').toLowerCase();
+        const loop = args[2];
+        const state = (args[3] || '').toLowerCase();
+        if (sub !== 'bypass' || !loop || (state !== 'on' && state !== 'off')) {
+          this.printCLILine(`% Usage: set bypass [LOOP_ID] [on/off]`, 'error-line');
+          return;
+        }
+        this.printCLILine(`Safety override: Bypass state for Loop ${loop.toUpperCase()} updated to ${state.toUpperCase()}.`, 'success');
+        this.orchestrator.logSystem(`Triconex SIS emergency loop bypass for [${loop.toUpperCase()}] updated to ${state.toUpperCase()} via CLI control.`, 'warning');
+        return;
+      }
+    }
+
+    // 5. Owl Data Diode Shell
+    if (role.includes('diode')) {
+      if (baseCmd === 'help' || baseCmd === '?') {
+        this.printCLILine(`Owl Cyber Unidirectional Gateway Admin CLI`, 'success');
+        this.printCLILine(`Available Core Commands:`);
+        this.printCLILine(`  help / ?                      Show this data diode control dashboard.`);
+        this.printCLILine(`  show diode-state              Verify hardware Tx/Rx alignment and optical lasers.`);
+        this.printCLILine(`  show transfer-stats           Inspect proxy data volume and error metrics.`);
+        this.printCLILine(`  show mappings                 View directional proxy mapping configurations.`);
+        this.printCLILine(`  show optical-stats            Dump raw fiber laser voltage and dB levels.`);
+        this.printCLILine(`  ping [IP]                     Test interface connectivity.`);
+        this.printCLILine(`  clear                         Clear CLI logs.`);
+        return;
+      }
+
+      if (baseCmd === 'show') {
+        const sub = (args[1] || '').toLowerCase();
+        if (sub === 'diode-state' || sub === 'state') {
+          this.printCLILine(`UNIDIRECTIONAL DIODE hardware STATE:`, 'success');
+          this.printCLILine(`  TX Laser Board   : EMITTING (Green LED active)`);
+          this.printCLILine(`  RX Optical Board : CAPTURING (Optical alignment synced)`);
+          this.printCLILine(`  Physical Diode   : ISOLATION INTEGRITY VERIFIED (Unidirectional hardware enforced)`);
+          return;
+        }
+        if (sub === 'transfer-stats' || sub === 'stats') {
+          this.printCLILine(`UNIDIRECTIONAL TRANSFERRED DATA VOLUME:`, 'success');
+          this.printCLILine(`  Total Bytes Transferred : 489.1 MB`);
+          this.printCLILine(`  Instantaneous Baud rate : 45.2 Kbps`);
+          this.printCLILine(`  Dropped Packets (Rx)    : 0 packets`);
+          this.printCLILine(`  Buffer Utilization      : 1.2% capacity`);
+          return;
+        }
+        if (sub === 'mappings' || sub === 'rules') {
+          this.printCLILine(`UNIDIRECTIONAL PROXY PORT MAPPINGS:`, 'success');
+          this.printCLILine(`  UDP Stream (Modbus) : IT-Core-Port 5020 -> unidirectional-fiber -> OT-Core-Port 502`);
+          this.printCLILine(`  TCP Stream (Syslog) : IT-Core-Port 5140 -> unidirectional-fiber -> OT-Core-Port 514`);
+          return;
+        }
+        if (sub === 'optical-stats' || sub === 'optical') {
+          this.printCLILine(`FIBER OPTIC RECEIVER DIAGNOSTICS:`, 'success');
+          this.printCLILine(`  Signal Power     : -18.4 dBm (Acceptable base: -10 to -24 dBm)`);
+          this.printCLILine(`  Laser Wavelength : 1310 nm (Single-mode laser)`);
+          this.printCLILine(`  Bias Current     : 28.4 mA [Consensus status: PERFECT]`);
+          return;
+        }
+      }
+    }
+
+    // 6. Claroty Threat Sensor Shell
+    if (role.includes('claroty') || role.includes('sensor')) {
+      if (baseCmd === 'help' || baseCmd === '?') {
+        this.printCLILine(`Claroty CT-100 Passive Threat Detection Console`, 'success');
+        this.printCLILine(`Available Sensor Commands:`);
+        this.printCLILine(`  help / ?                      Show this Claroty admin shell menu.`);
+        this.printCLILine(`  show assets                   Dump Claroty passively discovered OT inventory.`);
+        this.printCLILine(`  show anomalies                List signature alerts and network baseline anomalies.`);
+        this.printCLILine(`  show engines                  Check deep packet inspection (DPI) parser status.`);
+        this.printCLILine(`  show capture-stats            Read passive capture drop rates and interface metrics.`);
+        this.printCLILine(`  ping [IP]                     Test connection to network nodes.`);
+        this.printCLILine(`  clear                         Clear CLI logs.`);
+        return;
+      }
+
+      if (baseCmd === 'show') {
+        const sub = (args[1] || '').toLowerCase();
+        if (sub === 'assets') {
+          this.printCLILine(`CLAROTY PASSIVE INVENTORY (Discovered OT Assets):`, 'success');
+          this.printCLILine(`-----------------------------------------------------------------------`);
+          this.printCLILine(`IP ADDRESS    | MANUFACTURER     | TYPE           | FIRMWARE  | PROTOCOL`);
+          this.printCLILine(`-----------------------------------------------------------------------`);
+          this.printCLILine(`192.168.10.20 | Siemens AG       | PLC Controller | v17.0.2   | S7Comm / Modbus`);
+          this.printCLILine(`192.168.10.21 | Rockwell / A-B   | PLC Controller | v33.0.0   | CIP / ENIP`);
+          this.printCLILine(`192.168.10.11 | Inductive SCADA  | SCADA HMI      | 8.1.28    | OPC UA / TCP`);
+          this.printCLILine(`192.168.99.10 | Invensys/Trico   | Safety SIS     | v11.5.0   | TSAA / Modbus`);
+          this.printCLILine(`-----------------------------------------------------------------------`);
+          return;
+        }
+        if (sub === 'anomalies' || sub === 'alerts') {
+          this.printCLILine(`ACTIVE OT ANOMALOUS DETECTIONS:`, 'success');
+          this.printCLILine(`  Anomaly #1: Modbus Write operation detected from unauthorized IT node (10.1.10.102).`);
+          this.printCLILine(`  Anomaly #2: Dynamic OSPF routing update packet traversing inside segregated OT subnet.`);
+          this.printCLILine(`  Anomalies status: 2 warning-level signatures active.`);
+          return;
+        }
+        if (sub === 'engines') {
+          this.printCLILine(`DEEP PACKET INSPECTION PARSER ENGINE STATUS:`, 'success');
+          this.printCLILine(`  Modbus Engine     : ENABLED (Processed: 48,102 frames)`);
+          this.printCLILine(`  S7Comm Engine     : ENABLED (Processed: 28,911 frames)`);
+          this.printCLILine(`  CIP / ENIP Engine : ENABLED (Processed: 14,809 frames)`);
+          this.printCLILine(`  DNP3 Engine       : STANDBY (No frames parsed)`);
+          return;
+        }
+        if (sub === 'capture-stats' || sub === 'capture') {
+          this.printCLILine(`SPAN PORT PASSIVE CAPTURE STATISTICS:`, 'success');
+          this.printCLILine(`  Interface Status      : active mirror (SpanPort_01)`);
+          this.printCLILine(`  Packets Processed     : 1,489,102`);
+          this.printCLILine(`  Dropped Packets (Tap) : 0 (0.00% drop rate)`);
+          return;
+        }
+      }
+    }
+
+    // Generic fallbacks for basic global commands inside industrial CLI
+    if (baseCmd === 'clear') {
+      const cliOutput = this.activeCLIOutput || document.getElementById('cliOutput');
+      if (cliOutput) cliOutput.innerHTML = '';
+      return;
+    }
+
+    if (baseCmd === 'ping') {
+      const dest = args[1];
+      if (!dest) {
+        this.printCLILine(`% Usage: ping [IP/Node]`, 'error-line');
+        return;
+      }
+      this.printCLILine(`PING ${dest} (56 bytes of data):`);
+      this.printCLILine(`64 bytes from ${dest}: icmp_seq=1 ttl=64 time=1.84 ms`);
+      this.printCLILine(`64 bytes from ${dest}: icmp_seq=2 ttl=64 time=1.22 ms`);
+      this.printCLILine(`64 bytes from ${dest}: icmp_seq=3 ttl=64 time=1.45 ms`);
+      this.printCLILine(`--- ${dest} ping statistics ---`);
+      this.printCLILine(`3 packets transmitted, 3 received, 0% packet loss, time 2004ms`);
+      return;
+    }
+
+    // Catch-all syntax error for specific hardware shell context
+    this.printCLILine(`% Syntax Error: Command "${cmd}" not recognized in this hardware industrial command set. Type "help" or "?" to inspect available diagnostics.`, 'error-line');
+  }
+
   executeCLICommand(cmdStr, node) {
     const cmd = cmdStr.trim();
     if (!cmd) return;
@@ -2074,6 +2534,14 @@ class DigitalTwinApp {
 
     const args = cmd.split(/\s+/);
     const baseCmd = args[0].toLowerCase();
+
+    // Route industrial devices to specific syntax execution!
+    const role = (node.role || '').toLowerCase();
+    const isIndustrial = role.includes('plc') || role.includes('controller') || role.includes('rtu') || role.includes('hmi') || role.includes('scada') || role.includes('actuator') || role.includes('valve') || role.includes('diode') || role.includes('claroty') || role.includes('vfd') || role.includes('drive');
+    if (isIndustrial) {
+      this.executeIndustrialCLI(cmd, node, args, baseCmd);
+      return;
+    }
 
     // 1. GLOBAL COMMANDS (Any Mode)
     if (baseCmd === 'help' || baseCmd === '?') {

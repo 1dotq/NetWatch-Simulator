@@ -473,7 +473,7 @@ class DeviceInspector {
       // Labels
       ctx.fillStyle = '#f8fafc';
       ctx.font = 'bold 8px Fira Code, monospace';
-      ctx.fillText(node.name.toUpperCase(), 16, 26);
+      ctx.fillText(String(node.name || node.id || 'Valve').toUpperCase(), 16, 26);
       ctx.fillStyle = '#94a3b8';
       ctx.font = '7px Fira Code, monospace';
       ctx.fillText("VALVE ANGLE: 45°", 16, 38);
@@ -556,7 +556,7 @@ class DeviceInspector {
       // Field labels
       ctx.fillStyle = '#cbd5e1';
       ctx.font = 'bold 8px Fira Code, monospace';
-      ctx.fillText(node.name.toUpperCase(), 16, 26);
+      ctx.fillText(String(node.name || node.id || 'Sensor').toUpperCase(), 16, 26);
 
       // ----------------------------------------------------
       // RACKMOUNT NETWORK INTERFACE / DATA DIODE / SWITCH
@@ -653,7 +653,7 @@ class DeviceInspector {
         // Brand labels
         ctx.fillStyle = '#38bdf8';
         ctx.font = 'bold 9px Fira Code, monospace';
-        ctx.fillText((node.os || node.role || 'DEVICE').toUpperCase().substring(0, 20), 14, 22);
+        ctx.fillText(String(node.os || node.role || 'DEVICE').toUpperCase().substring(0, 20), 14, 22);
 
         ctx.fillStyle = '#64748b';
         ctx.font = '8px Fira Code, monospace';
@@ -718,7 +718,7 @@ class DeviceInspector {
       ctx.fillText('AETHERIS NET-ENG', W - 97, H - 26);
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 8px Fira Code, monospace';
-      ctx.fillText(node.id.substring(0, 12), W - 97, H - 15);
+      ctx.fillText(String(node.id || 'SW').substring(0, 12), W - 97, H - 15);
     }
     } catch (err) {
       console.error("Physical chassis drawing failed, applying high-fidelity fallback:", err);

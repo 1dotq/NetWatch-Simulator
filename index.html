@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AETHERIS — an interactive, high-fidelity digital twin and training simulator for corporate IT networks and OT/ICS industrial control systems.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#090d16">
+  <title>AETHERIS — Industrial Digital Twin & ICS Security Lab</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23090d16'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%230ea5e9' stroke-width='2'/%3E%3Cellipse cx='16' cy='16' rx='11' ry='5' fill='none' stroke='%2338bdf8' stroke-width='1.5'/%3E%3Cellipse cx='16' cy='16' rx='11' ry='5' fill='none' stroke='%2338bdf8' stroke-width='1.5' transform='rotate(60 16 16)'/%3E%3Cellipse cx='16' cy='16' rx='11' ry='5' fill='none' stroke='%2338bdf8' stroke-width='1.5' transform='rotate(120 16 16)'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Futuristic Landing Page Portal Overlay -->
+  <div id="landingPage" class="landing-page">
+    <div class="landing-content">
+      <div class="landing-logo">
+        <span class="logo-sub">LAB PORTAL</span>
+        <span class="logo-main">AETHERIS</span>
+        <div class="logo-tag">INDUSTRIAL DIGITAL TWIN & ICS SECURITY LAB</div>
+      </div>
+      
+      <div class="landing-grid">
+        <!-- Settings Column -->
+        <div class="landing-card settings-card">
+          <h3>CO-DRIVER API INTEGRATION</h3>
+          <p class="settings-desc">Enter your Google Gemini or Anthropic Claude developer API key to unlock dynamic natural language canvas orchestration and smart incident triage playbooks.</p>
+          
+          <div class="setting-field">
+            <label for="selProvider">API PROVIDER</label>
+            <select id="selProvider" class="cyber-select">
+              <option value="gemini">Google Gemini Developer API</option>
+              <option value="claude">Anthropic Claude Developer API</option>
+            </select>
+          </div>
+          
+          <div class="setting-field">
+            <label for="txtApiKey">DEVELOPER API KEY</label>
+            <input type="password" id="txtApiKey" class="cyber-input-password" placeholder="AI_API_KEY_SECRET..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <span class="field-note">Saved privately in local browser localStorage. No data is sent to external servers.</span>
+          </div>
+
+          <div style="margin-top: 10px;" class="alert-item warning">
+            <div class="alert-item-body" style="font-size: 0.65rem;">
+              <strong>CORS ADVISORY:</strong> Google Gemini Developer API allows direct fetch calls from standard client-side HTML files (perfect for offline/local runtimes). Select Gemini for easy local browser testing.
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspaces Column -->
+        <div class="landing-card workspace-card">
+          <h3>SELECT CYBER RANGE MISSION</h3>
+          
+          <div class="workspace-list" id="workspaceListContainer">
+            <!-- Dynamically populated portfolio of 15 advanced labs in app.js -->
+          </div>
+
+          <button id="btnLaunchTwin" class="cyber-btn w-100" style="margin-top: 18px; justify-content: center; height: 38px; font-size: 0.85rem;">
+            LAUNCH SIMULATION WORKSPACE
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Top System Header -->
+    <header class="system-header">
+      <div class="brand">
+        <span class="brand-sub">PLATFORM</span>
+        <span class="brand-main">AETHERIS</span>
+      </div>
+
+      <div class="status-ticker" role="status" aria-live="polite" aria-label="System status indicators">
+        <div class="ticker-item">
+          <span class="ticker-label">SYS STATE</span>
+          <span class="ticker-value text-glow-green" id="sysStateTicker">ONLINE</span>
+        </div>
+        <div class="ticker-item">
+          <span class="ticker-label">ICS STATUS</span>
+          <span class="ticker-value text-glow-green" id="icsStatusTicker">STABLE</span>
+        </div>
+        <div class="ticker-item">
+          <span class="ticker-label">AI ORCHESTRATOR</span>
+          <span class="ticker-value text-glow-blue" id="aiHeartbeatTicker">HEARTBEAT OK</span>
+        </div>
+        <div class="ticker-item">
+          <span class="ticker-label">SIM CLOCK</span>
+          <span class="ticker-value font-mono" id="simTimeTicker">00:00:00.00</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <button id="btnPlayPause" type="button" class="cyber-btn" title="Pause/Resume Simulation">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <span id="txtPlayPause">PAUSE</span>
+        </button>
+        <button id="btnTriggerAttack" type="button" class="cyber-btn btn-danger" title="Simulate Threat Event">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          TRIGGER TEST INCIDENT
+        </button>
+        <button id="btnUndo" type="button" class="cyber-btn-sm" style="height: 32px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(56, 189, 248, 0.4);" title="Undo Last Change (Ctrl+Z)">
+          ↩️ UNDO
+        </button>
+        <button id="btnRedo" type="button" class="cyber-btn-sm" style="height: 32px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(56, 189, 248, 0.4);" title="Redo Last Change (Ctrl+Y)">
+          ↪️ REDO
+        </button>
+        <button id="btnResetTwin" type="button" class="cyber-btn-sm btn-danger-outline" style="height: 32px;" title="Reset Digital Twin to Baseline State">
+          RESET TWIN
+        </button>
+        <button id="btnExitWorkspace" type="button" class="cyber-btn-sm btn-danger-outline" style="height: 32px;" title="Exit to Landing Page">
+          EXIT WORKSPACE
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Grid (AETHERIS Three-Column Lab) -->
+    <main class="workspace">
+      
+      <!-- Column 1: AETHERIS Chat Co-Pilot Sidebar (Left) -->
+      <section class="panel left-panel chat-panel" id="leftPanelPane" style="display: flex; flex-direction: column;">
+        <div class="panel-header" id="leftPanelHeader" style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;" class="left-header-title">
+            <span class="pulse-indicator"></span>
+            <h2 id="aiModelVersion" style="margin: 0;">AETHERIS ASSISTANT // CO-PILOT</h2>
+          </div>
+          <button id="btnToggleLeftPanel" class="win-btn" style="color: #94a3b8; font-size: 0.65rem; background: transparent; border: none; cursor: pointer;" title="Collapse Panel">◀ MINIMIZE</button>
+        </div>
+        
+        <!-- Sidebar Tabs Switcher -->
+        <div class="sidebar-tabs" role="tablist" aria-label="Co-pilot panel tabs" style="flex-shrink: 0;">
+          <button id="tabBtnChat" type="button" role="tab" aria-selected="true" class="sidebar-tab-btn active" onclick="window.appInstance?.switchSidebarTab('chat')">AI CO-PILOT CHAT</button>
+          <button id="tabBtnAudit" type="button" role="tab" aria-selected="false" class="sidebar-tab-btn" onclick="window.appInstance?.switchSidebarTab('audit')">AI HARDENING AUDIT</button>
+          <button id="tabBtnTimeline" type="button" role="tab" aria-selected="false" class="sidebar-tab-btn" onclick="window.appInstance?.switchSidebarTab('timeline')">INCIDENT LOG</button>
+        </div>
+
+        <!-- Tab Content 1: Conversational Feed -->
+        <div class="chat-wrapper" id="tabContentChat" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          <!-- Conversational feed -->
+          <div class="chat-history" id="chatHistory" style="flex: 1; overflow-y: auto;">
+            <div class="chat-bubble agent-bubble">
+              <span class="bubble-sender">AETHERIS AI</span>
+              <p>Welcome to your **AETHERIS ICS Emulation Lab**. I am your conversational Co-Driver.</p>
+              <p>You can ask me to dynamically configure the topology, segment subnets, clear elements, or inject cyber anomalies in plain English.</p>
+              <div class="bubble-time">SYSTEM ONLINE</div>
+            </div>
+          </div>
+          
+          <!-- Suggestion Chips for quick orchestration -->
+          <div class="suggestion-chips" role="group" aria-label="Quick orchestration actions" style="flex-shrink: 0;">
+            <button type="button" class="chip-btn" onclick="window.appInstance?.orchestrator?.logTerminal('PROMPT: Segment OT network subnet', 'info'); window.appInstance?.orchestrator?.executeMicrosegmentation(true);">Segment Subnet</button>
+            <button type="button" class="chip-btn" onclick="window.appInstance?.orchestrator?.logTerminal('PROMPT: Check PLC firmware integrity', 'info'); window.appInstance?.rebootAllPLCs();">Reboot Field PLCs</button>
+            <button type="button" class="chip-btn" onclick="window.appInstance?.orchestrator?.logTerminal('PROMPT: Mitigate all active threats', 'info'); window.appInstance?.orchestrator?.remediateThreats();">Mitigate Threat</button>
+          </div>
+
+          <!-- Conversational Input Bar -->
+          <div class="chat-input-row" style="flex-shrink: 0; display: flex; align-items: center; gap: 4px;">
+            <button id="btnVoiceAssist" type="button" class="chat-send-btn" title="Toggle Voice Speak Aloud (TTS)" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; padding: 0 8px; width: auto; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;" aria-label="Toggle Voice Assist">
+              🔇
+            </button>
+            <input type="text" id="chatInput" placeholder="Ask AETHERIS to build or modify topology..." autocomplete="off" spellcheck="false" enterkeyhint="send" aria-label="Chat prompt to AETHERIS AI" style="flex: 1; min-width: 0;">
+            <button id="btnSendChat" type="button" class="chat-send-btn" title="Send Prompt to AETHERIS AI" aria-label="Send prompt to AETHERIS AI">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab Content 2: AI Security Audit Recommendations -->
+        <div class="audit-wrapper" id="tabContentAudit" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <div class="audit-header" style="flex-shrink: 0;">
+            <h3>AI INFRASTRUCTURE AUDIT</h3>
+            <p>Real-time configuration validator analyzing layout segmentation, firmware integrity, and credential rules.</p>
+          </div>
+          <div class="audit-issues-list" id="auditIssuesList" style="flex: 1; overflow-y: auto;">
+            <!-- Rendered statefully in app.js -->
+            <div class="audit-item issue-stable">
+              <div class="audit-item-header">
+                <span class="title">NO THREAT SIGNATURES</span>
+                <span class="badge">SECURE</span>
+              </div>
+              <div class="audit-item-body">All deployed nodes are stable and operating with authorized firmware.</div>
+            </div>
+          </div>
+          <button class="btn-auto-harden" style="flex-shrink: 0;" onclick="window.appInstance?.triggerAutoHardening()">🛡️ EXECUTE AUTO-HARDENING PLAYBOOK</button>
+        </div>
+
+        <!-- Tab Content 3: Incident Timeline Log -->
+        <div class="audit-wrapper" id="tabContentTimeline" style="flex: 1; display: none; flex-direction: column; overflow: hidden;">
+          <div class="audit-header" style="flex-shrink: 0;">
+            <h3>INCIDENT TIMELINE</h3>
+            <p>Chronological attack chain log with severity classification and timestamps.</p>
+          </div>
+          <div id="timelineList" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px;">
+            <div style="color: var(--text-muted); font-size: 0.7rem; text-align: center; padding: 20px 0;">No incidents logged. Trigger an attack to begin recording.</div>
+          </div>
+          <button class="btn-auto-harden" style="flex-shrink: 0; border-color: var(--danger-red); color: var(--danger-red); background: rgba(239,68,68,0.05);" onclick="window.appInstance?.clearIncidentTimeline()">🗑 CLEAR TIMELINE LOG</button>
+        </div>
+      </section>
+
+      <!-- Column 2: Twin Canvas & Device CLI Console (Center) -->
+      <section class="panel center-panel split-center">
+        <!-- Canvas view -->
+        <div class="canvas-panel-group">
+          <div class="panel-header canvas-header">
+            <div class="header-left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="panel-icon"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              <h2>INTERACTIVE TOPOLOGY CANVAS // TWIN VIEW</h2>
+            </div>
+            <div class="canvas-legend">
+              <span class="legend-item"><span class="legend-dot dot-it"></span>IT Net</span>
+              <span class="legend-item"><span class="legend-dot dot-ot"></span>OT Net</span>
+              <span class="legend-item"><span class="legend-dot dot-plc"></span>PLCs</span>
+              <span class="legend-item"><span class="legend-dot dot-vuln"></span>Alert</span>
+            </div>
+          </div>
+          <div class="canvas-container" style="position: relative;">
+            <!-- Packet Tracer-style Hardware Toolbox -->
+            <div class="hardware-toolbox" id="hardwareToolbox">
+              <div class="toolbox-header">🔧 HARDWARE TOOLBOX</div>
+              <div class="toolbox-tabs" role="tablist" aria-label="Hardware categories" style="display: grid; grid-template-columns: 1fr 1fr 1fr;">
+                <button type="button" role="tab" aria-selected="true" class="toolbox-tab active" id="btnTabCoreNet">🌐 NET</button>
+                <button type="button" role="tab" aria-selected="false" class="toolbox-tab" id="btnTabIndustrial">🏭 ICS</button>
+                <button type="button" role="tab" aria-selected="false" class="toolbox-tab" id="btnTabSec">🛡 SEC</button>
+              </div>
+              <div class="toolbox-body">
+                <!-- Core Net Devices (Branded) -->
+                <div class="toolbox-section" id="sectionCoreNet">
+                  <div class="tool-item" data-tool="cisco-router" title="Cisco IOS XE Router — Enterprise/ISP Gateway">
+                    <span class="tool-icon">🖧</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Cisco Router</span>
+                      <span style="font-size:0.5rem;color:#64748b;">IOS XE 17.x</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="juniper-router" title="Juniper MX Edge Router — High-performance Carrier">
+                    <span class="tool-icon">🔀</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Juniper MX</span>
+                      <span style="font-size:0.5rem;color:#64748b;">JunOS 21.x</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="arista-switch" title="Arista Cloud Switch — Data-Center Spine/Leaf">
+                    <span class="tool-icon">⇿</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Arista cEOS</span>
+                      <span style="font-size:0.5rem;color:#64748b;">EOS 4.28</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="cisco-switch" title="Cisco Catalyst Switch — Campus Access Layer">
+                    <span class="tool-icon">⊞</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Cisco Cat</span>
+                      <span style="font-size:0.5rem;color:#64748b;">IOS 15.x</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="pc" title="End Host / Workstation / Kali Linux">
+                    <span class="tool-icon">🖥️</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">End Host</span>
+                      <span style="font-size:0.5rem;color:#64748b;">Ubuntu / Kali</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- ICS/OT Devices (Branded) -->
+                <div class="toolbox-section hidden" id="sectionIndustrial">
+                  <div class="tool-item" data-tool="siemens-plc" title="Siemens S7-1500 PLC — Process Controller">
+                    <span class="tool-icon">🤖</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Siemens S7</span>
+                      <span style="font-size:0.5rem;color:#64748b;">TIA Portal</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="ab-plc" title="Allen-Bradley Logix — Assembly Loop Controller">
+                    <span class="tool-icon">⚙️</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">A-B Logix</span>
+                      <span style="font-size:0.5rem;color:#64748b;">Studio 5000</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="schneider-rtu" title="Schneider Electric RTU — Remote Telemetry Unit">
+                    <span class="tool-icon">📡</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Schneider RTU</span>
+                      <span style="font-size:0.5rem;color:#64748b;">EcoStruxure</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="hmi" title="Inductive Automation SCADA HMI Console">
+                    <span class="tool-icon">📺</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">SCADA HMI</span>
+                      <span style="font-size:0.5rem;color:#64748b;">Ignition 8.x</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="actuator" title="Smart Flow Actuator — Thermodynamic Solenoid Valve">
+                    <span class="tool-icon">🌡️</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Actuator</span>
+                      <span style="font-size:0.5rem;color:#64748b;">EtherNet/IP</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Security Devices -->
+                <div class="toolbox-section hidden" id="sectionSec">
+                  <div class="tool-item" data-tool="paloalto-fw" title="Palo Alto NGFW — Advanced Threat Prevention">
+                    <span class="tool-icon">🔥</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Palo Alto</span>
+                      <span style="font-size:0.5rem;color:#64748b;">PAN-OS 11</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="forti-fw" title="Fortinet FortiGate — UTM Security Gateway">
+                    <span class="tool-icon">🛡️</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">FortiGate</span>
+                      <span style="font-size:0.5rem;color:#64748b;">FortiOS 7.x</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="cisco-ips" title="Cisco IPS Sensor — Signature-Based Intrusion Detection">
+                    <span class="tool-icon">🔎</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Cisco IPS</span>
+                      <span style="font-size:0.5rem;color:#64748b;">IOS IPS 7.x</span>
+                    </div>
+                  </div>
+                  <div class="tool-item" data-tool="wireshark-tap" title="Wireshark Link Tap — Passive Packet Capture Probe">
+                    <span class="tool-icon">🦈</span>
+                    <div style="display:flex;flex-direction:column;gap:1px;">
+                      <span class="tool-label">Wire Tap</span>
+                      <span style="font-size:0.5rem;color:#64748b;">SPAN / Mirror</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="toolbox-footer">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px;">
+                  <button class="btn-clear-toolbox wireshark-btn" id="btnOpenWireshark" title="Open Wireshark Protocol Analyzer" style="background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.4); color: #38bdf8; font-size: 0.58rem; width: 100%; margin: 0; padding: 6px 0;">🦈 WIRESHARK</button>
+                  <button class="btn-clear-toolbox tracer-btn" id="btnOpenPacketTracer" title="Open Interactive Packet Tracer" style="background: rgba(168,85,247,0.12); border-color: rgba(168,85,247,0.4); color: #c084fc; font-size: 0.58rem; width: 100%; margin: 0; padding: 6px 0;">📡 TRACER</button>
+                </div>
+                <div class="tool-item cable-tool" data-tool="cable" title="Connect Copper/Ethernet Cable between Nodes" style="justify-content: center;">
+                  <span class="tool-icon">🔌</span> <span class="tool-label">CABLE LINK</span>
+                </div>
+                <div class="tool-item delete-tool" data-tool="delete" title="Delete Tool: Select and click any device or link on the canvas to delete it" style="justify-content: center;">
+                  <span class="tool-icon">🗑️</span> <span class="tool-label">DELETE TOOL</span>
+                </div>
+                <button class="btn-clear-toolbox" id="btnClearToolbox" title="Clear current tool selection">Clear Selection</button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;">
+                  <button class="btn-clear-toolbox" id="btnSaveTopology" title="💾 Save layout as JSON" style="padding: 3px 0;">💾 Save</button>
+                  <button class="btn-clear-toolbox" id="btnLoadTopology" title="📂 Load layout from JSON" style="padding: 3px 0;">📂 Load</button>
+                  <button class="btn-clear-toolbox" id="btnExportPng" title="📷 Export canvas as PNG image" style="padding: 3px 0;">📷 Export PNG</button>
+                  <button class="btn-clear-toolbox" id="btnAutoArrange" title="⚡ Auto-arrange nodes" style="padding: 3px 0;">⚡ Auto Arrange</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;">
+                  <button class="btn-clear-toolbox" id="btnToggleGrid" title="Toggle snap-to-grid" style="padding: 3px 0;">⊞ Grid Snap</button>
+                  <button class="btn-clear-toolbox" id="btnShowShortcuts" title="? Keyboard shortcuts" style="padding: 3px 0;">? Shortcuts</button>
+                </div>
+              </div>
+            </div>
+
+            <canvas id="networkCanvas" role="img" aria-label="Interactive network topology canvas showing IT and OT devices and their links"></canvas>
+            <div class="canvas-overlay">
+              <button id="btnZoomIn" type="button" class="zoom-btn" title="Zoom In" aria-label="Zoom in">+</button>
+              <button id="btnZoomOut" type="button" class="zoom-btn" title="Zoom Out" aria-label="Zoom out">-</button>
+              <button id="btnResetZoom" type="button" class="zoom-btn" title="Reset View" aria-label="Reset view">⛶</button>
+              <button id="btnToggleHUD" type="button" class="zoom-btn" title="Toggle Fullscreen HUD Mode" aria-label="Toggle fullscreen HUD mode" style="font-size: 0.75rem;">🖥️</button>
+            </div>
+            <!-- Live Network Stats Overlay -->
+            <div id="networkStatsOverlay" class="net-stats-overlay">
+              <div class="stats-row"><span class="stats-label">NODES</span><span class="stats-val font-mono" id="statNodeCount">0</span></div>
+              <div class="stats-row"><span class="stats-label">LINKS</span><span class="stats-val font-mono" id="statLinkCount">0</span></div>
+              <div class="stats-row"><span class="stats-label">PKT/S</span><span class="stats-val font-mono" id="statPps">0</span></div>
+              <div class="stats-row"><span class="stats-label">THREAT</span><span class="stats-val font-mono" id="statThreats" style="color: var(--success-green);">0</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Device CLI Console shell -->
+        <div class="cli-panel" id="cliPanelPane">
+          <div class="cli-header" id="cliHeader" style="cursor: pointer;">
+            <span class="cli-title">INTERACTIVE DEVICE SHELL</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="cli-status" id="cliStatus" style="margin-right: 8px;">ACTIVE: NONE</span>
+              <button id="btnToggleCliPanel" class="win-btn" style="color: #94a3b8; font-size: 0.65rem;" title="Collapse Panel">▼ MINIMIZE</button>
+            </div>
+          </div>
+          
+          <!-- Side-by-side terminal wrapper to prevent overlapping or blocking -->
+          <div class="cli-body-wrapper" style="display: flex; flex: 1; overflow: hidden; min-height: 0;">
+            <!-- Left column: Profile card -->
+            <div id="deviceProfileContainer" class="device-profile-empty font-mono">
+              Select an asset on the canvas above to attach a Cisco, FortiOS, or Modbus/VxWorks interactive serial terminal shell...
+            </div>
+            
+            <!-- Right column: CLI output and input -->
+            <div class="cli-terminal-container" style="flex: 1; display: flex; flex-direction: column; background: #0f172a; overflow: hidden;">
+              <div class="cli-output font-mono" id="cliOutput" role="log" aria-live="polite" aria-label="Device shell output" style="flex: 1; overflow-y: auto; padding: 12px; font-size: 0.75rem; color: #cbd5e1; display: flex; flex-direction: column; gap: 4px;">
+                <div class="cli-line comment-line"># AETHERIS Interactive Device Shell initialized.</div>
+                <div class="cli-line comment-line"># Standby. Click any topology node above to open a direct SSH/Serial CLI session.</div>
+              </div>
+              
+              <div class="cli-input-row font-mono" id="cliInputRow" style="height: 38px; min-height: 38px; display: flex; align-items: center; padding: 0 12px; gap: 6px; background: #0b0f19; border-top: 1px solid #1e293b; color: #38bdf8; font-size: 0.75rem;">
+                <span class="cli-prompt" id="cliPrompt">NONE&gt;</span>
+                <input type="text" id="cliInput" placeholder="Type command here (e.g. 'help', 'show config')..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Device CLI command input" disabled style="flex: 1; background: transparent; border: none; outline: none; color: #ffffff; font-family: var(--font-mono); font-size: 0.75rem;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Column 3: SCADA Process Telemetry & Playbook Controls (Right) -->
+      <section class="panel right-panel scada-panel" id="icsProcessControls">
+        <div class="panel-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="panel-icon"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          <h2>ICS PROCESS & THREAT DETECTOR</h2>
+        </div>
+        <div class="panel-body scada-body">
+          
+          <!-- Physical Indicators -->
+          <div class="control-group">
+            <h3>REACTOR PROCESS STATE (REACTOR-3)</h3>
+            <div class="telemetry-grid">
+              <div class="telemetry-card">
+                <span class="card-title">REACTOR TEMP</span>
+                <span class="card-value font-mono" id="valTemp">42.5 °C</span>
+                <div class="card-bar-container">
+                  <div class="card-bar bg-cyan" id="barTemp" style="width: 42%;"></div>
+                </div>
+              </div>
+              <div class="telemetry-card">
+                <span class="card-title">REACTOR PRESSURE</span>
+                <span class="card-value font-mono" id="valPressure">1.22 MPa</span>
+                <div class="card-bar-container">
+                  <div class="card-bar bg-green" id="barPressure" style="width: 30%;"></div>
+                </div>
+              </div>
+              <div class="telemetry-card">
+                <span class="card-title">WATER LEVEL</span>
+                <span class="card-value font-mono" id="valLevel">65.8 %</span>
+                <div class="card-bar-container">
+                  <div class="card-bar bg-blue" id="barLevel" style="width: 65%;"></div>
+                </div>
+              </div>
+              <div class="telemetry-card">
+                <span class="card-title">INLET FLOW</span>
+                <span class="card-value font-mono" id="valFlow">12.4 L/s</span>
+                <div class="card-bar-container">
+                  <div class="card-bar bg-purple" id="barFlow" style="width: 50%;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Valve Slider Actuators -->
+            <div class="valve-section">
+              <div class="valve-item">
+                <span class="valve-label">Inlet Valve (V-101)</span>
+                <span class="valve-status font-mono text-green" id="statusValve1">OPEN (52%)</span>
+                <input type="range" id="valveSlider1" min="0" max="100" value="52" aria-label="Inlet Valve V-101 opening percentage">
+              </div>
+              <div class="valve-item">
+                <span class="valve-label">Outlet Valve (V-102)</span>
+                <span class="valve-status font-mono text-green" id="statusValve2">OPEN (45%)</span>
+                <input type="range" id="valveSlider2" min="0" max="100" value="45" aria-label="Outlet Valve V-102 opening percentage">
+              </div>
+              <div class="valve-item">
+                <span class="valve-label">Emergency Relief (XV-103)</span>
+                <span class="valve-status font-mono text-red" id="statusValve3">CLOSED</span>
+                <button id="btnEmergencyValve" type="button" class="cyber-btn-sm btn-danger-outline">ACTUATE MANUAL RELEASE</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Time Speed Control slider -->
+          <div class="control-group">
+            <h3>SIMULATION CONTROLS</h3>
+            <div class="control-row">
+              <label for="speedSlider">Time Dilation</label>
+              <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1.0">
+              <span id="speedValue" class="slider-display">1.0x</span>
+            </div>
+            <div class="btn-grid">
+              <button id="btnNormalMode" class="btn-sm active">Normal Mode</button>
+              <button id="btnStressMode" class="btn-sm">Stress Test</button>
+            </div>
+          </div>
+
+          <!-- Telemetry physics charts -->
+          <div class="control-group" id="telemetryChartGroup">
+            <h3>PROCESS TREND CHART</h3>
+            <div class="chart-container">
+              <canvas id="telemetryChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Alert Board -->
+          <div class="control-group flex-fill">
+            <h3>ANOMALY DETECTION BOARD</h3>
+            <div class="alert-board" id="alertBoard" role="log" aria-live="polite" aria-label="Anomaly detection alerts">
+              <div class="alert-placeholder">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="placeholder-icon text-glow-green"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <span>ALL SYSTEMS STABLE // NO ALERTS</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Playbook Mitigations -->
+          <div class="control-group">
+            <h3>AI DYNAMIC MITIGATION ENGINE</h3>
+            <div class="playbook-controls">
+              <div class="toggle-row">
+                <span class="toggle-label">Auto-Mitigate Anomalies</span>
+                <label class="switch">
+                  <input type="checkbox" id="chkAutoMitigate" checked>
+                  <span class="slider round"></span>
+                </label>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">Subnet Microsegmentation</span>
+                <label class="switch">
+                  <input type="checkbox" id="chkMicroseg">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+              <button id="btnMitigateNow" class="cyber-btn btn-sm btn-primary-outline w-100" style="margin-top: 10px;">
+                Execute Active Mitigations
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Column 3: AETHERIS Autonomous Lab Validation & Traffic (Right Sidebar fallback for Campus/Blank) -->
+      <section class="panel right-panel netpilot-panel" id="netpilotControls" style="display: none;">
+        <div class="panel-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="panel-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          <h2>LAB MONITOR & PERFORMANCE</h2>
+        </div>
+        <div class="panel-body scada-body">
+          <!-- Active Context Banner -->
+          <div class="control-group">
+            <h3>ACTIVE LAB CONTEXT</h3>
+            <div class="control-row">
+              <span class="legend-item" style="font-size: 0.8rem; font-weight: 700; color: var(--success-green);">
+                <span class="legend-dot dot-plc" style="background: var(--success-green); display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px;"></span>
+                LAB STATUS: ACTIVE & STABLE
+              </span>
+            </div>
+            <div style="background: var(--brand-blue-light); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; font-size: 0.75rem; color: var(--brand-blue); line-height: 1.45;">
+              💡 <strong>PRO-TIP:</strong> Click on any device node in the topology canvas to SSH directly into its serial terminal interface.
+            </div>
+          </div>
+
+          <!-- Step 4: Autonomous Validation Dashboard -->
+          <div class="control-group">
+            <h3>AUTONOMOUS VERIFICATION</h3>
+            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 4px;">
+              AETHERIS AI automatically audits active routing tables, OSPF areas, and protocol adjacencies.
+            </p>
+            
+            <div class="workspace-list" id="validationResultsList">
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; border-bottom: 1px solid var(--border-color); padding: 6px 0;">
+                <span style="font-weight: 600; color: var(--text-primary);">OSPF Area Adjacencies</span>
+                <span class="text-glow-green" style="font-size: 0.65rem;">FULL / ESTAB</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; border-bottom: 1px solid var(--border-color); padding: 6px 0;">
+                <span style="font-weight: 600; color: var(--text-primary);">MPLS LDP Session (Core)</span>
+                <span class="text-glow-green" style="font-size: 0.65rem;">OPERATIONAL</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; border-bottom: 1px solid var(--border-color); padding: 6px 0;">
+                <span style="font-weight: 600; color: var(--text-primary);">iBGP VPNv4 Routing Path</span>
+                <span class="text-glow-green" style="font-size: 0.65rem;">ACTIVE (2 PREFIX)</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; border-bottom: 1px solid var(--border-color); padding: 6px 0;">
+                <span style="font-weight: 600; color: var(--text-primary);">VRF Isolation (CUSTOMER_A)</span>
+                <span class="text-glow-green" style="font-size: 0.65rem;">VERIFIED</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; padding: 6px 0;">
+                <span style="font-weight: 600; color: var(--text-primary);">End-to-End VRF Ping Loop</span>
+                <span class="text-glow-green" style="font-size: 0.65rem;">SUCCESS (0% LOSS)</span>
+              </div>
+            </div>
+
+            <button id="btnRunValidation" class="cyber-btn w-100" style="justify-content: center; margin-top: 8px;">
+              ⚡ FORCE FULL LAB VERIFICATION
+            </button>
+            <button id="btnGenerateReport" class="cyber-btn w-100" style="justify-content: center; margin-top: 8px; border-color: var(--brand-blue); background: rgba(14, 165, 233, 0.05); color: var(--brand-blue);">
+              🖨️ EXPORT ENTERPRISE AUDIT REPORT
+            </button>
+          </div>
+
+          <!-- Step 5: Traffic Generator and Performance -->
+          <div class="control-group">
+            <h3>IPERF3 PERFORMANCE TESTER</h3>
+            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 8px;">
+              Generate high-fidelity TCP/UDP traffic across routing boundaries and encrypted tunnels.
+            </p>
+            
+            <div class="setting-field" style="margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary);">TARGET NODE SOURCE</label>
+              <select id="iperfSrcSelect" class="cyber-select" style="font-size: 0.75rem; padding: 6px;">
+                <option value="PE-01">PE-01 (Cisco IOL)</option>
+                <option value="CE-01">CE-01 (Customer Workstation)</option>
+              </select>
+            </div>
+
+            <div class="setting-field" style="margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary);">TARGET NODE DESTINATION</label>
+              <select id="iperfDstSelect" class="cyber-select" style="font-size: 0.75rem; padding: 6px;">
+                <option value="PE-02">PE-02 (Arista cEOS)</option>
+                <option value="CE-02">CE-02 (Remote Workstation)</option>
+              </select>
+            </div>
+
+            <button id="btnRunIperf" class="cyber-btn w-100" style="justify-content: center; background: var(--brand-blue); border-color: var(--brand-blue); color: white;">
+              📈 START IPERF3 TRAFFIC STREAM
+            </button>
+          </div>
+
+          <!-- Capture-The-Flag Scenario Panel (Hardcore Feature 25) -->
+          <div class="control-group" id="ctfScenariosBlock">
+            <h3>🏆 INDUSTRIAL SECURITY CTF MISSIONS</h3>
+            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 8px;">
+              Test your engineering and cyber defense skills in realistic guided network scenarios!
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px;">
+              <button class="cyber-btn" id="btnCtf1" style="justify-content: flex-start; text-align: left; font-size: 0.7rem; padding: 6px 10px; border-left: 3px solid #64748b;">
+                🚨 Mission 1: Segment IT/OT Decouple
+              </button>
+              <div id="ctf1Details" class="hidden font-mono" style="font-size: 0.65rem; padding: 6px; background: rgba(15, 23, 42, 0.05); border-radius: 4px; color: var(--text-secondary); line-height: 1.5;">
+                <span id="obj1_1">[ ]</span> Isolate ENG-WS from network<br/>
+                <span id="obj1_2">[ ]</span> Microsegment IT-OT physical bridge links
+              </div>
+              
+              <button class="cyber-btn" id="btnCtf2" style="justify-content: flex-start; text-align: left; font-size: 0.7rem; padding: 6px 10px; border-left: 3px solid #64748b;">
+                🛡️ Mission 2: Harden PLC Modbus Writing
+              </button>
+              <div id="ctf2Details" class="hidden font-mono" style="font-size: 0.65rem; padding: 6px; background: rgba(15, 23, 42, 0.05); border-radius: 4px; color: var(--text-secondary); line-height: 1.5;">
+                <span id="obj2_1">[ ]</span> Deploy a new Palo Alto Firewall<br/>
+                <span id="obj2_2">[ ]</span> Restrict Modbus Port 502 access
+              </div>
+
+              <button class="cyber-btn" id="btnCtf3" style="justify-content: flex-start; text-align: left; font-size: 0.7rem; padding: 6px 10px; border-left: 3px solid #64748b;">
+                🔄 Mission 3: Link Fault Redundancy
+              </button>
+              <div id="ctf3Details" class="hidden font-mono" style="font-size: 0.65rem; padding: 6px; background: rgba(15, 23, 42, 0.05); border-radius: 4px; color: var(--text-secondary); line-height: 1.5;">
+                <span id="obj3_1">[ ]</span> Snip the compromised RTR connection link<br/>
+                <span id="obj3_2">[ ]</span> Setup static routing to backup RTR gateway
+              </div>
+            </div>
+            <div id="ctfProgressMsg" style="font-size: 0.7rem; font-weight: 700; color: var(--brand-blue); text-align: center; margin-top: 4px;"></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Custom Right-Click Context Menu -->
+  <div id="canvasContextMenu" class="context-menu hidden">
+    <div class="context-item" id="ctxOpenCLI">
+      <span class="icon">💻</span> Open CLI Terminal
+    </div>
+    <div class="context-item" id="ctxOpenConfigs">
+      <span class="icon">⚙️</span> Inspect Hardware Configs
+    </div>
+    <div class="context-item" id="ctxReboot">
+      <span class="icon">🔄</span> Warm Reboot Asset
+    </div>
+    <div class="context-divider"></div>
+    <div class="context-item danger" id="ctxIsolate">
+      <span class="icon">🚨</span> Isolate / Mitigate
+    </div>
+    <div class="context-item danger" id="ctxDelete">
+      <span class="icon">❌</span> Delete Asset
+    </div>
+  </div>
+
+  <!-- Lab Instructions & Co-Driver Help Modal overlay -->
+  <div id="labInstructionsModal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 20000; backdrop-filter: blur(8px);">
+    <div class="dark-window" style="width: 580px; max-height: 80vh; display: flex; flex-direction: column; border: 1px solid var(--brand-blue); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+      <div class="window-header" style="background: linear-gradient(90deg, #090d16 0%, rgba(14, 165, 233, 0.15) 100%);">
+        <span class="window-title" id="instModalTitle">📋 CHALLENGE MISSION BRIEFING</span>
+        <button id="instCloseBtn" class="cyber-btn" style="padding: 2px 8px; font-size: 0.7rem; border-color: var(--brand-blue); color: var(--brand-blue);">ACKNOWLEDGE</button>
+      </div>
+      <div class="window-body" style="overflow-y: auto; padding: 20px; font-family: var(--font-sans), sans-serif; color: var(--text-primary); display: flex; flex-direction: column; gap: 14px;">
+        <div style="border-left: 3px solid var(--brand-blue); padding-left: 10px;">
+          <h4 style="margin: 0 0 4px 0; font-size: 0.8rem; text-transform: uppercase; color: var(--brand-blue);">Objective Scenario</h4>
+          <p id="instObjectiveText" style="margin: 0; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;"></p>
+        </div>
+
+        <div>
+          <h4 style="margin: 0 0 6px 0; font-size: 0.8rem; text-transform: uppercase; color: var(--brand-blue);">Required Actions & Setup Tasks</h4>
+          <ul id="instTasksList" style="margin: 0; padding-left: 16px; font-size: 0.75rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 6px;">
+            <!-- Populate instructions checklists -->
+          </ul>
+        </div>
+
+        <div style="background: rgba(14, 165, 233, 0.05); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 0.7rem; font-weight: 700; color: var(--brand-blue); letter-spacing: 0.05em;">🤖 AI CO-DRIVER TACTICAL ASSISTANCE CHANNEL</span>
+          <p style="margin: 0; font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4;">
+            Task the Aetheris intelligence co-driver to dynamically explain this specific configuration loop, provide structural diagnostics, and outline the exact setup playbook commands to solve the lab.
+          </p>
+          <button id="instTaskAgentBtn" class="cyber-btn" style="align-self: flex-start; margin-top: 4px; padding: 6px 12px; font-size: 0.7rem; border-color: var(--brand-blue); background: rgba(14, 165, 233, 0.1); color: #fff;">
+            ⚡ TASK CO-DRIVER FOR BLUEPRINT SETUP
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Physical Device Inspector Modal (Packet Tracer-style) -->
+  <div id="physicalInspectorModal" class="hidden" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:25000;backdrop-filter:blur(10px);">
+    <div class="dark-window" style="width:820px;max-height:88vh;display:flex;flex-direction:column;border:1px solid rgba(56,189,248,0.5);box-shadow:0 0 60px rgba(14,165,233,0.25);">
+      <div class="window-header" style="background:linear-gradient(90deg,#060c18 0%,rgba(14,165,233,0.2) 100%);display:flex;align-items:center;justify-content:space-between;padding:0 16px;">
+        <span class="window-title" id="physNodeTitle">🔬 PHYSICAL DEVICE INSPECTOR</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span id="physDeviceStatus" style="font-size:0.65rem;font-weight:700;color:#22c55e;letter-spacing:0.05em;">● ONLINE</span>
+          <button id="physCloseBtn" class="cyber-btn" style="padding:2px 10px;font-size:0.7rem;border-color:var(--brand-blue);color:var(--brand-blue);">✕ CLOSE</button>
+        </div>
+      </div>
+      <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+        <!-- Left: Chassis diagram -->
+        <div style="width:340px;flex-shrink:0;border-right:1px solid rgba(56,189,248,0.15);display:flex;flex-direction:column;gap:0;background:rgba(3,7,18,0.6);">
+          <div style="padding:10px 14px;border-bottom:1px solid rgba(56,189,248,0.12);font-size:0.65rem;font-weight:700;color:var(--brand-blue);letter-spacing:0.05em;">CHASSIS VIEW</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:14px;">
+            <canvas id="physChassisCanvas" width="300" height="200" style="border-radius:6px;"></canvas>
+          </div>
+          <div style="padding:10px 14px;border-top:1px solid rgba(56,189,248,0.12);" id="physPortsLegend"></div>
+        </div>
+        <!-- Right: Telemetry panels -->
+        <div style="flex:1;display:flex;flex-direction:column;overflow-y:auto;padding:14px;gap:12px;">
+          <!-- Device Info -->
+          <div style="background:rgba(14,165,233,0.05);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="physDeviceInfo"></div>
+          <!-- Live Telemetry Gauges -->
+          <div style="background:rgba(3,7,18,0.5);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:12px;">
+            <div style="font-size:0.65rem;font-weight:700;color:var(--brand-blue);letter-spacing:0.05em;margin-bottom:10px;">⚡ LIVE TELEMETRY</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="physTelemetryGauges"></div>
+          </div>
+          <!-- Interface Table -->
+          <div style="background:rgba(3,7,18,0.5);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:12px;">
+            <div style="font-size:0.65rem;font-weight:700;color:var(--brand-blue);letter-spacing:0.05em;margin-bottom:8px;">🔌 INTERFACE STATUS</div>
+            <div id="physInterfaceTable" style="font-size:0.68rem;font-family:var(--font-mono);display:flex;flex-direction:column;gap:4px;"></div>
+          </div>
+          <!-- Protocol Stack -->
+          <div style="background:rgba(3,7,18,0.5);border:1px solid rgba(56,189,248,0.15);border-radius:8px;padding:12px;">
+            <div style="font-size:0.65rem;font-weight:700;color:var(--brand-blue);letter-spacing:0.05em;margin-bottom:8px;">📡 ACTIVE PROTOCOL STACK</div>
+            <div id="physProtocolStack" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wireshark-lite Protocol Analyzer Modal -->
+  <div id="wiresharkModal" class="hidden" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;z-index:24000;backdrop-filter:blur(10px);">
+    <div class="dark-window" style="width:1020px;max-height:88vh;display:flex;flex-direction:column;border:1px solid rgba(56,189,248,0.4);box-shadow:0 0 60px rgba(14,165,233,0.2);">
+      <!-- Title bar -->
+      <div class="window-header" style="background:linear-gradient(90deg,#030a14 0%,rgba(56,189,248,0.12) 100%);padding:0 12px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.1rem;">🦈</span>
+        <span class="window-title" style="flex:1;">AETHERIS WIRESHARK ANALYZER — Live Packet Capture</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button id="wsBtnCapture" class="cyber-btn" style="padding:3px 10px;font-size:0.65rem;border-color:#22c55e;color:#22c55e;" title="Start/Stop Capture">▶ CAPTURE</button>
+          <button id="wsBtnClear" class="cyber-btn" style="padding:3px 10px;font-size:0.65rem;border-color:#f59e0b;color:#f59e0b;" title="Clear">🗑 CLEAR</button>
+          <button id="wsBtnExport" class="cyber-btn" style="padding:3px 10px;font-size:0.65rem;border-color:#8b5cf6;color:#8b5cf6;" title="Export PCAP">💾 EXPORT</button>
+          <button id="wsCloseBtn" class="cyber-btn" style="padding:3px 10px;font-size:0.65rem;border-color:var(--brand-blue);color:var(--brand-blue);">✕ CLOSE</button>
+        </div>
+      </div>
+      <!-- Filter ribbon -->
+      <div style="padding:6px 12px;border-bottom:1px solid rgba(56,189,248,0.15);background:rgba(3,7,18,0.7);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:0.6rem;color:#64748b;font-weight:700;">FILTER:</span>
+        <div id="wsFilters" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+        <div style="flex:1;margin-left:6px;">
+          <input id="wsFilterInput" type="text" placeholder='ip.addr == 10.1.10.1 or modbus or ospf...' style="width:100%;background:rgba(3,7,18,0.9);border:1px solid rgba(56,189,248,0.2);border-radius:4px;padding:3px 8px;font-size:0.65rem;color:#94a3b8;font-family:var(--font-mono);outline:none;">
+        </div>
+      </div>
+      <!-- Three-pane layout -->
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0;">
+        <!-- Packet list pane -->
+        <div style="height:220px;flex-shrink:0;overflow-y:auto;border-bottom:1px solid rgba(56,189,248,0.15);" id="wsPacketListContainer">
+          <table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:0.62rem;" id="wsPacketTable">
+            <thead style="position:sticky;top:0;background:#04091a;z-index:1;">
+              <tr style="color:#38bdf8;border-bottom:1px solid rgba(56,189,248,0.2);">
+                <th style="padding:4px 8px;text-align:left;width:40px;">No.</th>
+                <th style="padding:4px 8px;text-align:left;width:70px;">Time</th>
+                <th style="padding:4px 8px;text-align:left;width:120px;">Source</th>
+                <th style="padding:4px 8px;text-align:left;width:120px;">Destination</th>
+                <th style="padding:4px 8px;text-align:left;width:80px;">Protocol</th>
+                <th style="padding:4px 8px;text-align:left;width:55px;">Length</th>
+                <th style="padding:4px 8px;text-align:left;">Info</th>
+              </tr>
+            </thead>
+            <tbody id="wsPacketListBody" style="color:#94a3b8;"></tbody>
+          </table>
+        </div>
+        <!-- Bottom: Decode tree + Hex dump -->
+        <div style="flex:1;display:flex;min-height:0;">
+          <!-- Packet decode tree -->
+          <div style="flex:1;overflow-y:auto;padding:8px 12px;border-right:1px solid rgba(56,189,248,0.15);font-family:var(--font-mono);font-size:0.62rem;" id="wsDecodeTree">
+            <div style="color:#475569;font-style:italic;margin-top:16px;text-align:center;">Select a packet above to decode...</div>
+          </div>
+          <!-- Hex dump -->
+          <div style="width:320px;flex-shrink:0;overflow-y:auto;padding:8px 12px;font-family:var(--font-mono);font-size:0.6rem;" id="wsHexDump">
+            <div style="color:#475569;font-style:italic;margin-top:16px;text-align:center;">Hex dump will appear here.</div>
+          </div>
+        </div>
+      </div>
+      <!-- Status bar -->
+      <div style="padding:4px 12px;border-top:1px solid rgba(56,189,248,0.15);background:rgba(3,7,18,0.8);display:flex;gap:12px;align-items:center;">
+        <span id="wsStatusPackets" style="font-size:0.6rem;color:#64748b;font-family:var(--font-mono);">Packets: 0</span>
+        <span id="wsStatusFiltered" style="font-size:0.6rem;color:#64748b;font-family:var(--font-mono);">Displayed: 0</span>
+        <span id="wsCapturingBadge" style="font-size:0.6rem;font-weight:700;color:#22c55e;" class="hidden">● CAPTURING</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Packet Tracer Simulation Modal -->
+  <div id="packetTracerModal" class="hidden" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;z-index:24000;backdrop-filter:blur(10px);">
+    <div class="dark-window" style="width:1000px;max-height:88vh;display:flex;flex-direction:column;border:1px solid rgba(168,85,247,0.4);box-shadow:0 0 60px rgba(168,85,247,0.15);">
+      <!-- Title bar -->
+      <div class="window-header" style="background:linear-gradient(90deg,#090514 0%,rgba(168,85,247,0.12) 100%);padding:0 12px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.1rem;">📡</span>
+        <span class="window-title" style="flex:1;color:#c084fc;">AETHERIS INTERACTIVE PACKET TRACER — Targeted Hop Analyzer</span>
+        <button id="ptCloseBtn" class="cyber-btn" style="padding:3px 10px;font-size:0.65rem;border-color:#a855f7;color:#c084fc;">✕ CLOSE</button>
+      </div>
+      <!-- Selector controls panel -->
+      <div style="padding:10px 14px;border-bottom:1px solid rgba(168,85,247,0.15);background:rgba(5,2,10,0.85);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <label style="font-size:0.58rem;color:#a855f7;font-weight:700;">SOURCE NODE:</label>
+          <select id="ptSourceSelect" style="background:#090514;border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:#e9d5ff;font-family:var(--font-mono);font-size:0.65rem;padding:3px 8px;outline:none;width:180px;"></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <label style="font-size:0.58rem;color:#a855f7;font-weight:700;">DESTINATION NODE:</label>
+          <select id="ptDestSelect" style="background:#090514;border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:#e9d5ff;font-family:var(--font-mono);font-size:0.65rem;padding:3px 8px;outline:none;width:180px;"></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <label style="font-size:0.58rem;color:#a855f7;font-weight:700;">PROTOCOL / CARRIER:</label>
+          <select id="ptProtoSelect" style="background:#090514;border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:#e9d5ff;font-family:var(--font-mono);font-size:0.65rem;padding:3px 8px;outline:none;width:180px;">
+            <option value="ICMP">ICMP Echo Request (Ping)</option>
+            <option value="TCP_SYN">TCP SYN (Port 80/443 Gateway Test)</option>
+            <option value="MODBUS">Modbus TCP Read holding registers</option>
+            <option value="OSPF">OSPF Dynamic Link State update</option>
+            <option value="HTTP">HTTP GET Enterprise Index page</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:flex-end;height:34px;margin-left:auto;">
+          <button id="ptBtnTrace" class="cyber-btn" style="border-color:#a855f7;color:#c084fc;padding:6px 16px;font-size:0.68rem;background:rgba(168,85,247,0.12);font-weight:700;display:flex;align-items:center;gap:6px;">
+            ⚡ RUN SIMULATION TRACE
+          </button>
+        </div>
+      </div>
+      <!-- Core interface grid -->
+      <div style="display:flex;flex:1;min-height:0;background:#05020a;">
+        <!-- Left panel: Hop timeline logs -->
+        <div style="flex:1;border-right:1px solid rgba(168,85,247,0.15);overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;" id="ptHopsContainer">
+          <div style="color:#6b21a8;font-style:italic;text-align:center;margin-top:40px;font-size:0.7rem;">
+            Select source/destination endpoints and trigger trace simulation to view hop logs...
+          </div>
+        </div>
+        <!-- Right panel: Structural hop-by-hop decoder -->
+        <div style="width:400px;flex-shrink:0;overflow-y:auto;padding:12px;background:rgba(9,5,20,0.4);display:flex;flex-direction:column;gap:8px;" id="ptDetailsContainer">
+          <div style="color:#6b21a8;font-style:italic;text-align:center;margin-top:40px;font-size:0.7rem;">
+            Select any simulated hop block on the left to inspect detailed L2/L3 routing structures...
+          </div>
+        </div>
+      </div>
+      <!-- Status bar -->
+      <div style="padding:6px 12px;border-top:1px solid rgba(168,85,247,0.15);background:rgba(9,5,20,0.85);display:flex;justify-content:space-between;align-items:center;font-size:0.6rem;color:#8b5cf6;font-family:var(--font-mono);">
+        <span>Trace Engine: STABLE</span>
+        <span id="ptTraceHopsInfo">Hops: 0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Cheatsheet Modal -->
+  <div id="shortcutsModal" class="hidden" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:30000;backdrop-filter:blur(10px);">
+    <div class="dark-window" style="width:520px;max-height:80vh;display:flex;flex-direction:column;border:1px solid rgba(56,189,248,0.4);">
+      <div class="window-header" style="background:linear-gradient(90deg,#060c18 0%,rgba(14,165,233,0.2) 100%);">
+        <span class="window-title">⌨️ KEYBOARD SHORTCUTS</span>
+        <button id="shortcutsCloseBtn" class="cyber-btn" style="padding:2px 10px;font-size:0.7rem;border-color:var(--brand-blue);color:var(--brand-blue);">✕ CLOSE</button>
+      </div>
+      <div style="overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="shortcut-section">
+            <div class="shortcut-header">SIMULATION</div>
+            <div class="shortcut-row"><kbd>Space</kbd><span>Play / Pause</span></div>
+            <div class="shortcut-row"><kbd>Esc</kbd><span>Dismiss overlays</span></div>
+            <div class="shortcut-row"><kbd>?</kbd><span>This shortcuts menu</span></div>
+          </div>
+          <div class="shortcut-section">
+            <div class="shortcut-header">CANVAS</div>
+            <div class="shortcut-row"><kbd>Scroll</kbd><span>Zoom in/out</span></div>
+            <div class="shortcut-row"><kbd>Right-click</kbd><span>Context menu</span></div>
+            <div class="shortcut-row"><kbd>Drag</kbd><span>Pan canvas</span></div>
+            <div class="shortcut-row"><kbd>Ctrl + Z</kbd><span>Undo last change</span></div>
+            <div class="shortcut-row"><kbd>Ctrl + Y</kbd><span>Redo last change</span></div>
+          </div>
+          <div class="shortcut-section">
+            <div class="shortcut-header">TOOLBOX</div>
+            <div class="shortcut-row"><kbd>C</kbd><span>Cable link tool</span></div>
+            <div class="shortcut-row"><kbd>Del</kbd><span>Delete selected node</span></div>
+            <div class="shortcut-row"><kbd>G</kbd><span>Toggle grid snap</span></div>
+          </div>
+          <div class="shortcut-section">
+            <div class="shortcut-header">CLI TERMINAL</div>
+            <div class="shortcut-row"><kbd>↑ ↓</kbd><span>Command history</span></div>
+            <div class="shortcut-row"><kbd>Tab</kbd><span>Autocomplete</span></div>
+            <div class="shortcut-row"><kbd>Enter</kbd><span>Execute command</span></div>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border-color);margin-top:4px;padding-top:8px;font-size:0.65rem;color:var(--text-muted);text-align:center;">
+          AETHERIS v2026.1 — Press <strong>?</strong> anytime to return to this screen
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Simulation scripts -->
+  <script src="physics-sim.js"></script>
+  <script src="network-canvas.js"></script>
+  <script src="llm-service.js"></script>
+  <script src="orchestrator.js"></script>
+  <script src="wireshark.js"></script>
+  <script src="packet-tracer.js"></script>
+  <script src="inspector.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

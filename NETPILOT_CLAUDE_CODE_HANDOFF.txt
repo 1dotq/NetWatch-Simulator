@@ -1,0 +1,199 @@
+================================================================================
+NETPILOT - INTERACTIVE DIGITAL TWIN & ICS NETWORKING SIMULATOR
+Developer Handoff and Technical Architecture Specifications (For Claude Code)
+================================================================================
+
+This document provides a highly technical, deep-dive specification of the 
+AETHERIS NetPilot application architecture, files, state structures, canvas renderers,
+thermodynamics equations, and core event lifecycles.
+
+--------------------------------------------------------------------------------
+1. CODEBASE FILE ARCHITECTURE & SUB-COMPONENTS
+--------------------------------------------------------------------------------
+
+* index.html
+  - Holds the grid styling and layout elements.
+  - Sidebar Panels: Interactive Chat, Lab Checklists, Telemetry Charts.
+  - Interactive Terminal Interface: Includes input text element with id 'cliInput' 
+    and log outputs target element with id 'cliOutput'.
+  - Core styling includes dark-theme glassmorphic variables, high-contrast layouts 
+    tailored to Cisco UX styling, and absolute container setups for canvas views.
+
+* app.js (Stateful Controller - DigitalTwinApp)
+  - Main loop execution: Uses requestAnimationFrame bound loop driving simulation 
+    time ticks, packet animation advances, and charts updates.
+  - Cisco IOS CLI execution parser: Matches commands like `ping`, `traceroute`, 
+    `nslookup`, `show ip ospf neighbor`, `configure terminal`, `interface`, etc.
+  - Credentials & configuration setups: Saves provider API keys, initializes canvas 
+    managers, and sets default Proxmox ECO mode default triggers.
+  - UI binds: Controls buttons callbacks (validation, iperf3 sweeps, export reports).
+
+* network-canvas.js (Canvas 2D Interface - NetworkTwinCanvas)
+  - Canvas coordinates mapping helper: Transforms screens coordinates to world positions 
+    via zoom and pan offset scale parameters.
+  - Custom vector graphics overrides: Renders physical router crosshairs, ethernet slots, 
+    shielded firewalls, layered AD servers, PLC terminal slots, and gauge indicator needles.
+  - Background zoning dividers: Emulates IT Enterprise boundaries (sky-blue) and OT 
+    ICS boundaries (purple-slate).
+  - Background overlay backdrops: Draws horizontal steel DIN-rails and modular server racks.
+  - Snaps coordinates: Grid snapping to 20px intervals on Shift-dragging.
+  - Double-click toggles: Clips and restores active cabling links.
+
+* physics-sim.js (Thermodynamics Reactor Physics Simulation - ReactorPhysicsSim)
+  - Differential thermodynamics step equations.
+  - Emulates liquid volumes level (%), gaseous temperatures (°C), and internal ideal pressures (MPa).
+  - Torque Torricelli equation outflow formulas, thermal loop feedback reactions, 
+    and relief valve venting drop states.
+  - Canvas telemetry history plots tracker.
+
+* orchestrator.js (Diagnostics & Security Auditing - AIOrchestrator)
+  - Diagnostic checklist evaluator: Validates routing adjacencies and VRF boundaries.
+  - Anomaly status tracker: Pulses hazard alert borders and prints network alarm warn messages.
+
+* llm-service.js (LLM Topology Integration - AELlmService)
+  - Structures active topology nodes and links into standard prompt templates.
+  - Formulates Google Gemini / Anthropic Claude REST payload formats.
+  - Integrates local Mock offline AI engine models to handle requests when offline.
+
+--------------------------------------------------------------------------------
+2. DATA STRUCTURE SCHEMA & SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+Within `DigitalTwinApp` and `NetworkTwinCanvas`, global states are tracked using
+pre-allocated arrays and key-value mapping models:
+
+* canvas.nodes (Array of Node Objects)
+  ------------------------------------------------------------------------------
+  Field Name          Type        Description
+  ------------------------------------------------------------------------------
+  id                  String      Unique ID identifier (e.g. 'PE-01', 'CE-01')
+  name                String      Human readable chassis name (e.g. 'Enterprise Switch')
+  type                String      Zone classification: 'it' | 'ot' | 'plc' | 'field'
+  role                String      Chassis silhouette selector role: 
+                                  'Router' | 'Switch' | 'Firewall' | 'AD Server' |
+                                  'Workstation' | 'SCADA HMI' | 'Modbus PLC' |
+                                  'Actuator' | 'Sensor'
+  ip                  String      Static configured IP address
+  x                   Number      Calculated X coordinate on the Canvas
+  y                   Number      Calculated Y coordinate on the Canvas
+  status              String      Device runtime status: 
+                                  'online' | 'offline' | 'compromised' | 'isolated'
+  ospfState           String      OSPF status: 'N/A' | 'DOWN' | 'INIT' | 'FULL'
+  ------------------------------------------------------------------------------
+
+* canvas.links (Array of Interconnect Link Objects)
+  ------------------------------------------------------------------------------
+  Field Name          Type        Description
+  ------------------------------------------------------------------------------
+  sourceId            String      Originating source node ID
+  targetId            String      Destination target node ID
+  sourceInterface     String      Physical Ethernet socket selector (e.g. 'Gig0/1')
+  targetInterface     String      Physical Ethernet socket selector (e.g. 'Gig0/2')
+  status              String      Cabling line status: 
+                                  'online' | 'offline' (snipped) | 'isolated'
+  ------------------------------------------------------------------------------
+
+* app.cliHistory (Array of Commands)
+  - Retains the last 50 executed console strings.
+  - Paired with `app.cliHistoryIndex` (default -1) to track interactive history populates.
+
+--------------------------------------------------------------------------------
+3. HTML5 CANVAS CUSTOM SILHOUETTE DESIGN VECTORS
+--------------------------------------------------------------------------------
+
+Vector drawings inside `network-canvas.js` utilize manual Canvas 2D methods to render
+high-contrast hardware components natively:
+
+* Router (Catalyst 8300)
+  - concentric steel gray route boundary rings.
+  - four diagonal arrows crosshair symbols drawn outward from center core.
+
+* Switch (Catalyst 9300)
+  - 14px horizontal rack panel box layout.
+  - Rows of Ethernet slots (width 6px, height 4px) containing glowing green activity ports.
+
+* Next-Gen Firewall (Firepower 4110)
+  - Deep-shield guard boundaries.
+  - Three-tiered interlocking brick blocks path textures.
+
+* AD / Domain Controller (PowerEdge R750)
+  - Three layered horizontal rack boundaries.
+  - Cyan-blue hard drive cartridge slots and blinking system indicators.
+
+* SCADA HMI Screen
+  - Wide dark gray operators desk console.
+  - Mini mock grid lines, progress status bars, and analogue dials.
+
+* Industrial PLC (Modular Terminal controller)
+  - High-density wire connector blocks (yellow/gray slots).
+  - Core LCD display screen box and modular DIN clamp tabs.
+
+* Flow Actuator (Valve)
+  - Split butterfly pipelines, flow valve flanges, and handwheel controls.
+
+* Telemetry Sensor (Pressure Gauge)
+  - Analog round pressure scale face, telemetry dial indicator, and needle pointer.
+
+--------------------------------------------------------------------------------
+4. THERMODYNAMIC PROCESS EQUATIONS (physics-sim.js)
+--------------------------------------------------------------------------------
+
+The physics simulator processes dynamic fluids and thermal acceleration values:
+
+* Mass Balance Flow Differential:
+  Liquid level increments depend on incoming stream minus outflow velocity:
+  qIn  = (inletValve / 100) * 8.5   (Litres/sec)
+  qOut = (outletValve / 100) * 7.8 * Math.sqrt(level / 50)  (Torricelli's Law)
+  dLevel = (qIn - qOut) * 0.5 * dt
+  level = Math.max(2, Math.min(99, level + dLevel))
+
+* Exothermic Reaction Accel Loop:
+  Heat balances against reactor coolant volume. Over 70°C, exothermic loop spikes:
+  reactionHeat = 14.5
+  IF pressure > 1.8 THEN reactionHeat += (pressure - 1.8) * 12.0
+  IF temp > 70.0 THEN reactionHeat += (temp - 70.0) * 1.5
+  coolingRate = 0.22 * level
+  dTemp = (reactionHeat - coolingRate) * 0.3 * dt
+  temp = Math.max(15, Math.min(130, temp + dTemp))
+
+* Gas Law pressure Estimations:
+  pressure approximates temperature over liquid headspace:
+  headSpace = 101 - level
+  rawPressure = (temp * 0.015) * (60 / headSpace) * 2.0
+  pressure = Math.max(0.05, Math.min(4.0, rawPressure))
+
+* Vent Valve Depressurization:
+  IF reliefValve IS true THEN:
+    pressure = Math.max(0.12, pressure - 4.8 * dt)
+    temp = Math.max(20, temp - 8.0 * dt)
+    level = Math.max(5, level - 1.8 * dt)
+
+--------------------------------------------------------------------------------
+5. KEYBOARD EVENT LIFECYCLE INTERCEPTORS
+--------------------------------------------------------------------------------
+
+CLI inputs intercept keydowns on `#cliInput` statefully:
+
+* Enter Key:
+  - Trims, captures, and logs the instruction.
+  - Appends to command history array (`this.cliHistory.push(val)`).
+  - Resets `this.cliHistoryIndex` back to -1.
+  - Clears CLI prompt input field.
+
+* ArrowUp Key:
+  - Blocks standard cursor movement (`e.preventDefault()`).
+  - Iterates `this.cliHistoryIndex` backward (from history length down to 0).
+  - Populates input console with the saved history string.
+
+* ArrowDown Key:
+  - Blocks standard cursor movement (`e.preventDefault()`).
+  - Iterates `this.cliHistoryIndex` forward toward current commands.
+  - Wipes input when reaching index -1.
+
+* Tab Key (Cisco IOS keyword completion):
+  - Blocks default browser tab focus selector.
+  - Extracts the last word entered by user.
+  - Looks up match prefixes against core syntax dictionary.
+  - Completes word and appends spacing (e.g. completes "sho" to "show ").
+
+================================================================================

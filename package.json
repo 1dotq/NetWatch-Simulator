@@ -1,0 +1,21 @@
+{
+  "name": "netsim-digital-twin",
+  "version": "1.0.0",
+  "description": "AI-Orchestrated Network and ICS Digital Twin (browser app)",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "serve": "python3 -m http.server 8080"
+  },
+  "keywords": [
+    "network",
+    "ics",
+    "digital-twin",
+    "simulation",
+    "orchestration",
+    "browser"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1583,6 +1583,14 @@ class DigitalTwinApp {
   }
 
   attachCLISession(node) {
+    const role = (node.role || '').toLowerCase();
+    const isPremiumDevice = role.includes('sis') || role.includes('safety') || role.includes('diode') || role.includes('claroty') || role.includes('vfd') || role.includes('powerflex');
+    if (isPremiumDevice) {
+      if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
+        this.detachCLISession();
+        return;
+      }
+    }
     const cliStatus = document.getElementById('cliStatus');
     const cliPrompt = document.getElementById('cliPrompt');
     const cliInput = document.getElementById('cliInput');
@@ -3208,6 +3216,13 @@ class DigitalTwinApp {
   }
 
   openDeviceConfigWindow(node) {
+    const role = (node.role || '').toLowerCase();
+    const isPremiumDevice = role.includes('sis') || role.includes('safety') || role.includes('diode') || role.includes('claroty') || role.includes('vfd') || role.includes('powerflex');
+    if (isPremiumDevice) {
+      if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
+        return;
+      }
+    }
     const winId = `win-config-${node.id}`;
     const winTitle = `⚙️ Device Settings: ${node.name} (${node.ip})`;
     const config = this.getNodeConfig(node);
@@ -3702,6 +3717,11 @@ class DigitalTwinApp {
     document.querySelectorAll('.tool-item').forEach(item => {
       item.onclick = (e) => {
         const tool = item.getAttribute('data-tool');
+        if (['sis-controller', 'vfd-drive', 'data-diode', 'claroty-ids'].includes(tool)) {
+          if (!this.checkPremiumFeature('ics-assets', '🚨 ADVANCED ICS / OT INDUSTRIAL HARDWARE')) {
+            return;
+          }
+        }
         
         if (item.classList.contains('active-tool')) {
           // Toggle off

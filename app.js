@@ -802,6 +802,58 @@ class DigitalTwinApp {
       };
     }
 
+    // 0.6 Voice Speed & Profile Configuration Controls
+    this.voiceSpeed = parseFloat(localStorage.getItem('voiceSpeed') || '0.95');
+    this.selectedVoiceName = localStorage.getItem('selectedVoiceName') || 'default';
+
+    const sliderSpeed = document.getElementById('sliderVoiceSpeed');
+    const lblSpeed = document.getElementById('lblVoiceSpeed');
+    const selVoice = document.getElementById('selVoiceProfile');
+
+    if (sliderSpeed && lblSpeed) {
+      sliderSpeed.value = this.voiceSpeed;
+      lblSpeed.textContent = this.voiceSpeed.toFixed(2) + 'x';
+      sliderSpeed.oninput = (e) => {
+        this.voiceSpeed = parseFloat(e.target.value);
+        lblSpeed.textContent = this.voiceSpeed.toFixed(2) + 'x';
+        localStorage.setItem('voiceSpeed', this.voiceSpeed.toString());
+      };
+    }
+
+    const populateVoicesList = () => {
+      if (!('speechSynthesis' in window) || !selVoice) return;
+      const voices = window.speechSynthesis.getVoices();
+      
+      // Preserve default option
+      selVoice.innerHTML = '<option value="default">System Default (Robotic)</option>';
+      
+      // Filter for unique, English-speaking and premium/natural sounding voices
+      const filteredVoices = voices.filter(v => v.lang.startsWith('en') || v.lang.startsWith('en-'));
+      
+      filteredVoices.forEach(voice => {
+        const option = document.createElement('option');
+        option.value = voice.name;
+        option.textContent = voice.name.replace(/Microsoft|Google|Apple|Natural/g, '').trim() + ` (${voice.lang})`;
+        if (voice.name === this.selectedVoiceName) {
+          option.selected = true;
+        }
+        selVoice.appendChild(option);
+      });
+    };
+
+    if ('speechSynthesis' in window) {
+      // Chrome/Edge/Safari fire this asynchronously
+      window.speechSynthesis.onvoiceschanged = populateVoicesList;
+      populateVoicesList();
+    }
+
+    if (selVoice) {
+      selVoice.onchange = (e) => {
+        this.selectedVoiceName = e.target.value;
+        localStorage.setItem('selectedVoiceName', this.selectedVoiceName);
+      };
+    }
+
     // 1. Play/Pause controller
     const btnPlay = document.getElementById('btnPlayPause');
     const txtPlay = document.getElementById('txtPlayPause');
@@ -3294,12 +3346,20 @@ class DigitalTwinApp {
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
     const voices = window.speechSynthesis.getVoices();
-    const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft')));
-    if (englishVoice) {
-      utterance.voice = englishVoice;
+    
+    if (this.selectedVoiceName && this.selectedVoiceName !== 'default') {
+      const chosenVoice = voices.find(v => v.name === this.selectedVoiceName);
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+      }
+    } else {
+      const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft')));
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
     }
     
-    utterance.rate = 0.95; // Slightly slower, highly premium natural cadence
+    utterance.rate = this.voiceSpeed || 0.95; 
     utterance.pitch = 1.0;
     window.speechSynthesis.speak(utterance);
   }

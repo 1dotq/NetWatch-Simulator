@@ -162,6 +162,21 @@
             <button type="button" class="chip-btn" onclick="window.appInstance?.orchestrator?.logTerminal('PROMPT: Mitigate all active threats', 'info'); window.appInstance?.orchestrator?.remediateThreats();">Mitigate Threat</button>
           </div>
 
+          <!-- Dynamic Agent Voice settings panel -->
+          <div class="voice-settings-row" style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; border-top: 1px solid var(--border-color); background: rgba(15, 23, 42, 0.45); gap: 10px; font-size: 0.65rem;">
+            <div style="display: flex; align-items: center; gap: 4px; flex: 1;">
+              <span style="color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">🗣️ VOICE:</span>
+              <select id="selVoiceProfile" class="cyber-select" style="padding: 2px 4px; height: 22px; font-size: 0.65rem; border-radius: 4px; background: #0f172a; border: 1px solid var(--border-color); color: var(--text-primary); outline: none; width: 100%; max-width: 140px;">
+                <option value="default">System Default</option>
+              </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <span style="color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">⚡ SPEED:</span>
+              <input type="range" id="sliderVoiceSpeed" min="0.5" max="2.0" step="0.05" value="0.95" style="height: 4px; width: 65px; margin: 0; padding: 0; accent-color: var(--brand-blue); cursor: pointer; display: inline-block; vertical-align: middle;">
+              <span id="lblVoiceSpeed" style="font-family: var(--font-mono); color: var(--brand-blue); font-weight: 700; min-width: 25px; text-align: right; display: inline-block;">0.95x</span>
+            </div>
+          </div>
+
           <!-- Conversational Input Bar -->
           <div class="chat-input-row" style="flex-shrink: 0; display: flex; align-items: center; gap: 4px;">
             <button id="btnVoiceAssist" type="button" class="chat-send-btn" title="Toggle Voice Speak Aloud (TTS)" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; padding: 0 8px; width: auto; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;" aria-label="Toggle Voice Assist">

@@ -2088,13 +2088,12 @@ class DigitalTwinApp {
         if (sub === 'modbus') {
           this.printCLILine(`MODBUS TCP REGISTRY SUMMARY (Address Base 0)`, 'success');
           this.printCLILine(`COILS (Discrete Outputs):`);
-          this.printCLILine(`  00001: ${node.id === 'SIS-01' ? '1 (Safety Lock)' : (this.coil1 ? '1 (FORCED)' : '0 (AUTO)')} [Safety Loop Valve Control]`);
-          this.printCLILine(`  00002: ${this.coil2 ? '1' : '0'} [System Standby bypass]`);
+          this.printCLILine(`  00001: ${config.modbus.coils['1'] ? '1 (OPEN)' : '0 (CLOSED)'} [Inlet Valve Control]`);
+          this.printCLILine(`  00002: ${config.modbus.coils['2'] ? '1 (OPEN)' : '0 (CLOSED)'} [Outlet Valve Control]`);
           this.printCLILine(`HOLDING REGISTERS (Analog Inputs/Outputs):`);
-          this.printCLILine(`  40001: ${this.physicsSim?.rpm || 1780} [Generator Rotor RPM]`);
-          this.printCLILine(`  40002: ${this.physicsSim?.frequency?.toFixed(2) || '60.00'} Hz [Turbine Active Frequency]`);
-          this.printCLILine(`  40003: ${this.physicsSim?.temperature?.toFixed(1) || '38.5'} C [Reactor Core Temp]`);
-          this.printCLILine(`  40004: ${this.physicsSim?.pressure?.toFixed(1) || '14.7'} psi [Reactor Vessel Pressure]`);
+          this.printCLILine(`  40001: ${(this.sim?.temp * 100).toFixed(0) || '4250'} (scaled * 100) [Reactor Temperature]`);
+          this.printCLILine(`  40002: ${(this.sim?.pressure * 1000).toFixed(0) || '1220'} (scaled * 1000) [Reactor Vessel Pressure]`);
+          this.printCLILine(`  40003: ${(this.sim?.level * 100).toFixed(0) || '6580'} (scaled * 100) [Water Tank Level]`);
           return;
         }
         if (sub === 'state') {
@@ -2142,9 +2141,15 @@ class DigitalTwinApp {
           return;
         }
         if (type === 'coil') {
-          this.printCLILine(`Modbus Query success: Coil ${addr} is currently: ${this.coil1 ? 'ON (1)' : 'OFF (0)'}`);
+          const val = config.modbus.coils[addr] || config.modbus.coils[String(parseInt(addr))] ? 'ON (1)' : 'OFF (0)';
+          this.printCLILine(`Modbus Query success: Coil ${addr} is currently: ${val}`);
         } else if (type === 'register') {
-          this.printCLILine(`Modbus Query success: Register ${addr} value is currently: ${this.physicsSim?.rpm || 1780}`);
+          let val = 0;
+          if (addr === '40001') val = (this.sim?.temp * 100).toFixed(0);
+          else if (addr === '40002') val = (this.sim?.pressure * 1000).toFixed(0);
+          else if (addr === '40003') val = (this.sim?.level * 100).toFixed(0);
+          else val = 0;
+          this.printCLILine(`Modbus Query success: Register ${addr} value is currently: ${val}`);
         } else {
           this.printCLILine(`% Invalid query type: choose 'coil' or 'register'`, 'error-line');
         }
@@ -2160,8 +2165,7 @@ class DigitalTwinApp {
           return;
         }
         if (type === 'coil') {
-          const state = val === '1' || val.toLowerCase() === 'on';
-          this.executePLCForce(addr, state);
+          this.handleModbusSetCoil(addr, val, node);
         } else if (type === 'register') {
           this.printCLILine(`Modbus Register Force success: Register ${addr} set to ${val}.`, 'success');
           this.orchestrator.logSystem(`Modbus register ${addr} forced to ${val} via raw CLI payload.`, 'warning');

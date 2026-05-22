@@ -512,6 +512,14 @@ class DigitalTwinApp {
     if (btnUndo) btnUndo.onclick = () => this.undo();
     if (btnRedo) btnRedo.onclick = () => this.redo();
 
+    const btnShowBriefing = document.getElementById('btnShowBriefing');
+    if (btnShowBriefing) {
+      btnShowBriefing.onclick = () => {
+        const modal = document.getElementById('labInstructionsModal');
+        if (modal) modal.classList.remove('hidden');
+      };
+    }
+
     // 0.5 Voice Assistant Toggle
     this.voiceAssistEnabled = false;
     const btnVoice = document.getElementById('btnVoiceAssist');

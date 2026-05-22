@@ -627,6 +627,9 @@ class NetworkTwinCanvas {
     
     // 1.7 Draw Server Cabinet outlines behind IT server nodes (Server Cabinets Upgrade!)
     this.drawServerCabinets();
+    
+    // 1.8 Draw physical industrial plant components (Reactor tower and fluid flow pipes)
+    this.drawPhysicalPlant();
 
     // 2. Draw Connections/Bridges
     this.links.forEach(link => {
@@ -684,11 +687,204 @@ class NetworkTwinCanvas {
     // OT ICS Boundary Area (Upgrade 2)
     this.ctx.strokeStyle = 'rgba(139, 92, 246, 0.25)'; // Purple OT border trace
     this.ctx.fillStyle = 'rgba(21, 16, 42, 0.65)'; // High contrast deep purple-slate fill
-    this.drawRoundedRect(410, 20, 480, 420, 10, true, true);
+    this.drawRoundedRect(410, 20, 600, 420, 10, true, true);
     this.ctx.fillStyle = '#a78bfa'; // Purple text for OT Zone
-    this.ctx.fillText('OT INDUSTRIAL ICS NETWORK ZONE', 650, 38);
+    this.ctx.fillText('OT INDUSTRIAL ICS NETWORK ZONE & PROCESS TWIN', 710, 38);
 
     this.ctx.restore();
+  }
+
+  drawPhysicalPlant() {
+    // Only render for Reactor projects
+    if (!window.appInstance || window.appInstance.activeProjectType !== 'reactor') return;
+
+    const sim = window.appInstance.sim;
+    if (!sim) return;
+
+    const ctx = this.ctx;
+    ctx.save();
+
+    // 1. Define Reactor Vessel Dimensions & Coordinates
+    const rx = 910;
+    const ry = 50;
+    const rw = 80;
+    const rh = 360;
+
+    // 2. Draw animated fluid inside the Reactor Vessel based on sim.level
+    const liquidLevelHeight = (sim.level / 100) * (rh - 40);
+    const liquidY = ry + rh - 20 - liquidLevelHeight;
+
+    // Dynamic color matching temperature
+    let liquidColor = 'rgba(14, 165, 233, 0.4)'; // Cyber Cyan
+    let liquidGlow = 'rgba(14, 165, 233, 0.15)';
+    if (sim.temp > 75) {
+      liquidColor = 'rgba(239, 68, 68, 0.5)'; // Hot Red
+      liquidGlow = 'rgba(239, 68, 68, 0.2)';
+    } else if (sim.temp > 55) {
+      liquidColor = 'rgba(245, 158, 11, 0.45)'; // Warning Amber
+      liquidGlow = 'rgba(245, 158, 11, 0.18)';
+    }
+
+    // Draw Liquid Body
+    if (liquidLevelHeight > 0) {
+      ctx.fillStyle = liquidColor;
+      ctx.beginPath();
+      ctx.moveTo(rx + 6, liquidY);
+      // Animated liquid surface waves
+      const waveFreq = Date.now() / 200;
+      const waveAmp = 2.5;
+      for (let xOffset = 6; xOffset <= rw - 6; xOffset += 4) {
+        const wx = rx + xOffset;
+        const wy = liquidY + waveAmp * Math.sin(waveFreq + xOffset * 0.1);
+        ctx.lineTo(wx, wy);
+      }
+      ctx.lineTo(rx + rw - 6, ry + rh - 20);
+      ctx.lineTo(rx + 6, ry + rh - 20);
+      ctx.closePath();
+      ctx.fill();
+
+      // Liquid Surface Glow highlight
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(rx + 6, liquidY);
+      for (let xOffset = 6; xOffset <= rw - 6; xOffset += 4) {
+        const wx = rx + xOffset;
+        const wy = liquidY + waveAmp * Math.sin(waveFreq + xOffset * 0.1);
+        ctx.lineTo(wx, wy);
+      }
+      ctx.stroke();
+    }
+
+    // Draw steam bubbles if boiling (temp > 50°C)
+    if (sim.temp > 50 && liquidLevelHeight > 0) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      const bubbleCount = Math.floor((sim.temp - 40) / 4);
+      for (let i = 0; i < bubbleCount; i++) {
+        const bx = rx + 15 + ((Math.sin(Date.now() / 300 + i * 50) + 1) / 2) * (rw - 30);
+        const by = liquidY + 10 + ((Math.cos(Date.now() / 200 + i * 150) + 1) / 2) * (liquidLevelHeight - 20);
+        const br = 1 + (i % 3);
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 3. Draw Steel/Glass Reactor Vessel Tower Frame
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 4;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+    this.drawRoundedRect(rx, ry, rw, rh, 16, true, true);
+
+    // Dynamic Pressure Glow aura overlay on tank
+    if (sim.pressure > 1.8) {
+      const pPulse = 1 + 0.05 * Math.sin(Date.now() / 50);
+      ctx.strokeStyle = `rgba(239, 68, 68, ${0.3 + 0.1 * Math.sin(Date.now() / 100)})`;
+      ctx.lineWidth = 3 * pPulse;
+      this.drawRoundedRect(rx - 4, ry - 4, rw + 8, rh + 8, 20, false, true);
+    }
+
+    // Metal reinforcement rings (horizontal struts)
+    ctx.strokeStyle = 'rgba(71, 85, 105, 0.6)';
+    ctx.lineWidth = 2.5;
+    const strutsY = [ry + 90, ry + 180, ry + 270];
+    strutsY.forEach(sy => {
+      ctx.beginPath();
+      ctx.moveTo(rx, sy);
+      ctx.lineTo(rx + rw, sy);
+      ctx.stroke();
+    });
+
+    // Vertical metal support beams (structural aesthetics)
+    ctx.strokeStyle = 'rgba(71, 85, 105, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(rx + rw * 0.25, ry); ctx.lineTo(rx + rw * 0.25, ry + rh);
+    ctx.moveTo(rx + rw * 0.75, ry); ctx.lineTo(rx + rw * 0.75, ry + rh);
+    ctx.stroke();
+
+    // Reactor Labels
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '700 8px var(--font-sans), sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('REACTOR T-300', rx + rw / 2, ry - 8);
+
+    // Live telemetry display badge directly on the Reactor Tower
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    this.drawRoundedRect(rx + 8, ry + 25, rw - 16, 42, 4, true, true);
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '600 7px Fira Code';
+    ctx.textAlign = 'left';
+    ctx.fillText(`LVL: ${sim.level.toFixed(1)}%`, rx + 14, ry + 36);
+    ctx.fillText(`TMP: ${sim.temp.toFixed(1)}C`, rx + 14, ry + 46);
+    
+    ctx.fillStyle = sim.pressure > 2.0 ? '#ef4444' : '#10b981';
+    ctx.fillText(`PRS: ${sim.pressure.toFixed(2)}M`, rx + 14, ry + 56);
+
+    // 4. Draw Animated Pipelines/Tubes linking Field Actuators to Reactor Vessel
+    const pipes = [
+      { id: 'inlet', label: 'INFLOW', fy: 60, ty: ry + 80, color: '#38bdf8', active: sim.inletValve > 0, val: sim.inletValve },
+      { id: 'outlet', label: 'OUTFLOW', fy: 180, ty: ry + 200, color: '#f59e0b', active: sim.outletValve > 0, val: sim.outletValve },
+      { id: 'relief', label: 'RELIEF VENT', fy: 300, ty: ry + 120, color: '#ef4444', active: sim.reliefValve, val: sim.reliefValve ? 100 : 0 },
+      { id: 'sensor', label: 'SENSE LOOP', fy: 400, ty: ry + 320, color: '#10b981', active: true, val: 50 }
+    ];
+
+    pipes.forEach(p => {
+      const startX = 800;
+      const endX = rx;
+      
+      // Draw metallic pipeline background cylinder
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(startX, p.fy);
+      ctx.lineTo(endX, p.ty);
+      ctx.stroke();
+
+      // Outer metallic steel shine
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(startX, p.fy);
+      ctx.lineTo(endX, p.ty);
+      ctx.stroke();
+
+      // Core pipeline inner channel
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(startX, p.fy);
+      ctx.lineTo(endX, p.ty);
+      ctx.stroke();
+
+      // Flow Animation inside inner channel
+      if (p.active) {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2.5;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(startX, p.fy);
+        ctx.lineTo(endX, p.ty);
+        const flowShift = (Date.now() / 40) % 24;
+        ctx.setLineDash([8, 8]);
+        ctx.lineDashOffset = p.id === 'outlet' ? -flowShift : flowShift;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Small pipe labels
+      ctx.fillStyle = '#64748b';
+      ctx.font = '600 6px var(--font-sans), sans-serif';
+      ctx.textAlign = 'center';
+      const labelX = (startX + endX) / 2;
+      const labelY = (p.fy + p.ty) / 2 - 6;
+      ctx.fillText(p.label, labelX, labelY);
+    });
+
+    ctx.restore();
   }
 
   drawRoundedRect(x, y, w, h, r, stroke = true, fill = false) {

@@ -973,7 +973,7 @@ class NetworkTwinCanvas {
 
     // IMP-11: Animated traffic data-dot flowing along active links
     if (!isSnipped && !isIsolated && window.appInstance?.isPlaying) {
-      const t2 = ((Date.now() / 600) % 1);
+      const t2 = ((Date.now() / 2500) % 1);
       const bx = (1-t2)*(1-t2)*src.x + 2*(1-t2)*t2*mx + t2*t2*tgt.x;
       const by = (1-t2)*(1-t2)*src.y + 2*(1-t2)*t2*my + t2*t2*tgt.y;
       this.ctx.setLineDash([]);

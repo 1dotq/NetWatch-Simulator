@@ -18,6 +18,7 @@ class NetworkTwinCanvas {
     this.dragStart = { x: 0, y: 0 };
     this.selectedNode = null;
     this.hoveredNode = null;
+    this.gridSnap = true; // Snap custom deployed elements cleanly to 40px grid by default
     this.draggedNode = null;
 
     this.loadReactorProject();
@@ -622,6 +623,22 @@ class NetworkTwinCanvas {
     // 1. Draw Network Subnet Borders
     this.drawSubnetGrid();
 
+    // 1.2 Animated Sonar Radar Wave sweep line (Security Audit Scanner!)
+    if (!this.scanLineX) this.scanLineX = 0;
+    this.scanLineX = (this.scanLineX + 1.2) % 1050;
+    this.ctx.save();
+    this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+    this.ctx.lineWidth = 3;
+    this.ctx.beginPath();
+    this.ctx.moveTo(this.scanLineX, 20);
+    this.ctx.lineTo(this.scanLineX, 440);
+    this.ctx.stroke();
+
+    // scanner leading edge pulse glow
+    this.ctx.fillStyle = 'rgba(56, 189, 248, 0.015)';
+    this.ctx.fillRect(this.scanLineX - 60, 20, 60, 420);
+    this.ctx.restore();
+
     // 1.5 Draw Metallic DIN rails cabinet mockups behind OT cabinet nodes (DIN Rails Upgrade!)
     this.drawDinRails();
     
@@ -903,8 +920,18 @@ class NetworkTwinCanvas {
     this.ctx.save();
     
     let isSnipped = link.status === 'offline';
-    
-    if (link.status === 'isolated') {
+    const isIsolated = link.status === 'isolated';
+
+    const dx = tgt.x - src.x;
+    const dy = tgt.y - src.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    // IMP-8: Bezier curve control point perpendicular offset for aesthetic curved links
+    const curve = Math.min(dist * 0.18, 30);
+    const mx = (src.x + tgt.x) / 2 - dy / dist * curve;
+    const my = (src.y + tgt.y) / 2 + dx / dist * curve;
+
+    if (isIsolated) {
       this.ctx.strokeStyle = '#ef4444';
       this.ctx.lineWidth = 1.5;
       this.ctx.setLineDash([4, 4]);
@@ -913,54 +940,80 @@ class NetworkTwinCanvas {
       this.ctx.lineWidth = 1.5;
       this.ctx.setLineDash([6, 6]);
     } else {
-      this.ctx.strokeStyle = '#94a3b8';
-      this.ctx.lineWidth = 1.5;
+      // IMP-9: Traffic load colour coding
+      const loadVal = link.speed ? link.speed / 100 : 0.2;
+      const r = Math.floor(lerp(148, 239, Math.min(loadVal, 1)));
+      const g = Math.floor(lerp(163, 68, Math.min(loadVal, 1)));
+      const b = Math.floor(lerp(184, 68, Math.min(loadVal, 1)));
+      this.ctx.strokeStyle = `rgba(${r},${g},${b},0.75)`;
+      this.ctx.lineWidth = 1.5 + loadVal * 1.5;
       this.ctx.setLineDash([]);
+    }
+
+    // IMP-10: Encrypted link glow
+    if (link.encrypted && !isIsolated && !isSnipped) {
+      this.ctx.shadowColor = 'rgba(16, 185, 129, 0.4)';
+      this.ctx.shadowBlur = 5;
     }
 
     this.ctx.beginPath();
     this.ctx.moveTo(src.x, src.y);
-    this.ctx.lineTo(tgt.x, tgt.y);
+    this.ctx.quadraticCurveTo(mx, my, tgt.x, tgt.y);
     this.ctx.stroke();
+    this.ctx.shadowBlur = 0;
     
-    // Draw snip lightning bolt icon in center (Feature 23)
+    // Draw snip lightning bolt icon in center
     if (isSnipped) {
-      const cx = (src.x + tgt.x) / 2;
-      const cy = (src.y + tgt.y) / 2;
       this.ctx.fillStyle = '#ef4444';
       this.ctx.font = '10px Inter';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('⚡', cx, cy);
+      this.ctx.fillText('⚡', mx, my);
+    }
+
+    // IMP-11: Animated traffic data-dot flowing along active links
+    if (!isSnipped && !isIsolated && window.appInstance?.isPlaying) {
+      const t2 = ((Date.now() / 600) % 1);
+      const bx = (1-t2)*(1-t2)*src.x + 2*(1-t2)*t2*mx + t2*t2*tgt.x;
+      const by = (1-t2)*(1-t2)*src.y + 2*(1-t2)*t2*my + t2*t2*tgt.y;
+      this.ctx.setLineDash([]);
+      this.ctx.fillStyle = link.encrypted ? 'rgba(16,185,129,0.9)' : 'rgba(56,189,248,0.8)';
+      this.ctx.beginPath();
+      this.ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
+      this.ctx.fill();
     }
     
-    // Draw interface port labels (Feature 22)
-    if (link.sourceInterface || link.targetInterface) {
+    // Draw interface port labels
+    if ((link.sourceInterface || link.targetInterface) && dist > 60) {
+      const ux = dx / dist;
+      const uy = dy / dist;
       this.ctx.fillStyle = '#64748b';
       this.ctx.font = '7px Fira Code';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       
-      const dx = tgt.x - src.x;
-      const dy = tgt.y - src.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      
-      if (dist > 60) {
-        const ux = dx / dist;
-        const uy = dy / dist;
-        
-        if (link.sourceInterface) {
-          const sx = src.x + ux * 32;
-          const sy = src.y + uy * 32;
-          this.ctx.fillText(link.sourceInterface, sx, sy - 6);
-        }
-        
-        if (link.targetInterface) {
-          const tx = tgt.x - ux * 32;
-          const ty = tgt.y - uy * 32;
-          this.ctx.fillText(link.targetInterface, tx, ty - 6);
-        }
+      if (link.sourceInterface) {
+        const sx = src.x + ux * 32;
+        const sy = src.y + uy * 32;
+        this.ctx.fillText(link.sourceInterface, sx, sy - 6);
       }
+      
+      if (link.targetInterface) {
+        const tx2 = tgt.x - ux * 32;
+        const ty2 = tgt.y - uy * 32;
+        this.ctx.fillText(link.targetInterface, tx2, ty2 - 6);
+      }
+    }
+
+    // IMP-12: Speed badge label at midpoint for named links
+    if (link.speed && dist > 80) {
+      this.ctx.fillStyle = 'rgba(15,23,42,0.75)';
+      this.ctx.fillRect(mx - 16, my - 7, 32, 12);
+      this.ctx.fillStyle = '#94a3b8';
+      this.ctx.font = '6px Fira Code';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(`${link.speed}Mbps`, mx, my);
     }
 
     this.ctx.restore();
@@ -1028,13 +1081,21 @@ class NetworkTwinCanvas {
       }
     }
 
+    // Dynamic micro-tremble glitch effect for compromised nodes
+    let nx = n.x;
+    let ny = n.y;
+    if (n.status === 'compromised' && Math.random() > 0.8) {
+      nx += (Math.random() - 0.5) * 3.5;
+      ny += (Math.random() - 0.5) * 3.5;
+    }
+
     // Selected/Hovered halo rings (clean slate-blue design)
     if (n.status === 'compromised') {
       const pulse = 1 + 0.12 * Math.sin(Date.now() / 150);
       this.ctx.strokeStyle = glowColor;
       this.ctx.lineWidth = 2;
       this.ctx.beginPath();
-      this.ctx.arc(n.x, n.y, 22 * pulse, 0, Math.PI * 2);
+      this.ctx.arc(nx, ny, 22 * pulse, 0, Math.PI * 2);
       this.ctx.stroke();
     }
 
@@ -1044,7 +1105,7 @@ class NetworkTwinCanvas {
       this.ctx.lineWidth = 1.5;
       this.ctx.setLineDash([2, 2]);
       this.ctx.beginPath();
-      this.ctx.arc(n.x, n.y, 20 * pulse, 0, Math.PI * 2);
+      this.ctx.arc(nx, ny, 20 * pulse, 0, Math.PI * 2);
       this.ctx.stroke();
       this.ctx.setLineDash([]);
     }
@@ -1054,14 +1115,14 @@ class NetworkTwinCanvas {
       this.ctx.lineWidth = 2;
       this.ctx.setLineDash([4, 2]);
       this.ctx.beginPath();
-      this.ctx.arc(n.x, n.y, 24, 0, Math.PI * 2);
+      this.ctx.arc(nx, ny, 24, 0, Math.PI * 2);
       this.ctx.stroke();
       this.ctx.setLineDash([]);
     } else if (isHovered) {
       this.ctx.strokeStyle = '#64748b';
       this.ctx.lineWidth = 1.5;
       this.ctx.beginPath();
-      this.ctx.arc(n.x, n.y, 22, 0, Math.PI * 2);
+      this.ctx.arc(nx, ny, 22, 0, Math.PI * 2);
       this.ctx.stroke();
     }
 
@@ -1070,7 +1131,7 @@ class NetworkTwinCanvas {
     this.ctx.strokeStyle = primaryColor;
     this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
     this.ctx.beginPath();
-    this.ctx.arc(n.x, n.y, 20, 0, Math.PI * 2);
+    this.ctx.arc(nx, ny, 20, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.stroke();
 
@@ -1078,42 +1139,63 @@ class NetworkTwinCanvas {
     if (n.status === 'compromised') {
       this.ctx.fillStyle = '#ef4444';
       this.ctx.beginPath();
-      this.ctx.arc(n.x + 13, n.y - 13, 3, 0, Math.PI * 2);
+      this.ctx.arc(nx + 13, ny - 13, 3, 0, Math.PI * 2);
       this.ctx.fill();
     } else {
-      let isTrafficActive = Math.sin(Date.now() / 150 + n.x) > 0.4;
+      let isTrafficActive = Math.sin(Date.now() / 150 + nx) > 0.4;
       this.ctx.fillStyle = isTrafficActive ? '#10b981' : '#047857';
       this.ctx.beginPath();
-      this.ctx.arc(n.x + 13, n.y - 13, 3, 0, Math.PI * 2);
+      this.ctx.arc(nx + 13, ny - 13, 3, 0, Math.PI * 2);
       this.ctx.fill();
     }
 
     // Call high-fidelity custom hardware vector rendering method (Icon Hardware Upgrades!)
-    this.drawHardwareIcon(this.ctx, n.x, n.y, n.role || n.type, 20, primaryColor, n);
+    this.drawHardwareIcon(this.ctx, nx, ny, n.role || n.type, 20, primaryColor, n);
 
     // Metadata labels
     this.ctx.font = '600 9px var(--font-sans), sans-serif';
     this.ctx.fillStyle = '#f8fafc';
-    this.ctx.fillText(n.id, n.x, n.y + 30);
+    this.ctx.fillText(n.id, nx, ny + 30);
 
     this.ctx.font = '400 8px Fira Code';
     if (n.hasIpConflict) {
       this.ctx.fillStyle = '#ef4444';
-      this.ctx.fillText(n.ip + ' [!] CONFLICT', n.x, n.y + 40);
+      this.ctx.fillText(n.ip + ' [!] CONFLICT', nx, ny + 40);
     } else {
       this.ctx.fillStyle = varColorText(n.status);
-      this.ctx.fillText(n.ip, n.x, n.y + 40);
+      this.ctx.fillText(n.ip, nx, ny + 40);
     }
 
     // Note indicator: small amber dot top-right of node circle
     if (n.note) {
       this.ctx.beginPath();
-      this.ctx.arc(n.x + 14, n.y - 14, 4, 0, Math.PI * 2);
+      this.ctx.arc(nx + 14, ny - 14, 4, 0, Math.PI * 2);
       this.ctx.fillStyle = '#f59e0b';
       this.ctx.fill();
       this.ctx.strokeStyle = '#0f172a';
       this.ctx.lineWidth = 1;
       this.ctx.stroke();
+    }
+
+    // IMP-49: Live annotation label (e.g. valve open%, level%)
+    if (n._liveAnnotation) {
+      this.ctx.fillStyle = 'rgba(15,23,42,0.85)';
+      this.ctx.strokeStyle = '#38bdf8';
+      this.ctx.lineWidth = 0.8;
+      this.drawRoundedRect(nx - 20, ny + 44, 40, 11, 3, true, true);
+      this.ctx.fillStyle = '#38bdf8';
+      this.ctx.font = '700 7px Fira Code';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(n._liveAnnotation, nx, ny + 49.5);
+    }
+
+    // IMP-31: Search match highlight ring
+    if (n._searchMatch === false) {
+      this.ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+      this.ctx.beginPath();
+      this.ctx.arc(nx, ny, 22, 0, Math.PI * 2);
+      this.ctx.fill();
     }
 
     this.ctx.restore();
@@ -1568,4 +1650,9 @@ function varColorText(status) {
   if (status === 'compromised') return '#ff0055';
   if (status === 'isolated') return '#ffaa00';
   return '#8a99ad';
+}
+
+// Linear interpolation helper for colour blending
+function lerp(a, b, t) {
+  return a + (b - a) * t;
 }

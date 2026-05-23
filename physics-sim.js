@@ -23,6 +23,9 @@ class ReactorPhysicsSim {
     // Diagnostics / Attack vectors
     this.integrityBreached = false;
     this.compromisedSensorReadings = false; // Stuxnet mode
+
+    // SIS interlock tracking
+    this.sisInterlock = true;
     
     // Data history for high fidelity charts (last 60 frames)
     this.historyLength = 60;
@@ -31,6 +34,11 @@ class ReactorPhysicsSim {
       pressure: Array(this.historyLength).fill(this.pressure),
       temp: Array(this.historyLength).fill(this.temp)
     };
+
+    // IMP-1: Track peak values for alarm telemetry
+    this.peakPressure = this.pressure;
+    this.peakTemp = this.temp;
+    this.alarmTriggered = false;
 
     this.resize();
     let resizeTimeout;
@@ -58,6 +66,9 @@ class ReactorPhysicsSim {
     this.reliefValve = false;
     this.integrityBreached = false;
     this.compromisedSensorReadings = false;
+    this.peakPressure = this.nominalPressure;
+    this.peakTemp = this.nominalTemp;
+    this.alarmTriggered = false;
     this.history = {
       level:    Array(this.historyLength).fill(this.nominalLevel),
       pressure: Array(this.historyLength).fill(this.nominalPressure),
@@ -98,20 +109,14 @@ class ReactorPhysicsSim {
     this.temp = Math.max(15, Math.min(130, this.temp + dTemp));
 
     // Gas-Law Thermodynamic Pressure calculations:
-    // P * V = n * R * T -> equilibrium pressure is proportional to temp and
-    // inversely proportional to headspace (101 - Level).
     const headSpace = 101 - this.level;
     const pressureMultiplier = 2.0;
     const targetPressure = (this.temp * 0.015) * (60 / headSpace) * pressureMultiplier;
 
-    // Pressure is an integrated state, not a per-frame snapshot: relax it toward
-    // the gas-law equilibrium with a first-order lag so transient actuator
-    // effects (relief venting) persist instead of being overwritten each tick.
-    const pressureApproachRate = 0.8; // per second
+    const pressureApproachRate = 0.8;
     this.pressure += (targetPressure - this.pressure) * Math.min(1, pressureApproachRate * t);
 
-    // Relief Valve Venting dynamic: subtracts from the integrated state, so an
-    // open valve holds pressure down against the heat source across ticks.
+    // Relief Valve Venting
     if (this.reliefValve) {
       const ventFactor = 4.8 * t;
       this.pressure = Math.max(0.12, this.pressure - ventFactor);
@@ -120,6 +125,15 @@ class ReactorPhysicsSim {
     }
 
     this.pressure = Math.max(0.05, Math.min(4.0, this.pressure));
+
+    // IMP-1: Track running peak values
+    if (this.pressure > this.peakPressure) this.peakPressure = this.pressure;
+    if (this.temp > this.peakTemp) this.peakTemp = this.temp;
+
+    // IMP-2: Alarm triggered flag
+    if (this.pressure > this.criticalPressure || this.temp > this.criticalTemp) {
+      this.alarmTriggered = true;
+    }
 
     // Capture telemetry history
     this.history.level.push(this.level);
@@ -141,8 +155,18 @@ class ReactorPhysicsSim {
     
     ctx.clearRect(0, 0, w, h);
 
+    // IMP-3: Subtle dot-grid background for chart area
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.04)';
+    for (let gx = 8; gx < w; gx += 16) {
+      for (let gy = 8; gy < h; gy += 16) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // Draw Grid Lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 1;
     for (let i = 1; i < 4; i++) {
       const y = (h / 4) * i;
@@ -152,39 +176,73 @@ class ReactorPhysicsSim {
       ctx.stroke();
     }
 
+    // IMP-4: Draw critical pressure alarm threshold line
+    const critPressY = h - 5 - ((this.criticalPressure / 3.5)) * (h - 10);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, critPressY);
+    ctx.lineTo(w, critPressY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+    ctx.font = '600 6px Fira Code';
+    ctx.textAlign = 'left';
+    ctx.fillText('CRIT', 4, critPressY - 2);
+    ctx.restore();
+
     const isEco = document.body.classList.contains('perf-mode-eco');
-    // Plot helper
-    const drawLine = (data, minVal, maxVal, color, shadowColor) => {
+    const dx = w / (this.historyLength - 1);
+
+    // IMP-5: Gradient area fill helper for visual depth
+    const drawAreaLine = (data, minVal, maxVal, lineColor, gradTop, gradBot) => {
       ctx.save();
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = lineColor;
       ctx.lineWidth = 2;
       if (!isEco) {
-        ctx.shadowColor = shadowColor;
-        ctx.shadowBlur = 6;
+        ctx.shadowColor = lineColor;
+        ctx.shadowBlur = 5;
       }
-      ctx.beginPath();
 
-      const dx = w / (this.historyLength - 1);
+      // Build path
+      ctx.beginPath();
       for (let i = 0; i < data.length; i++) {
-        const val = data[i];
-        // Map value to canvas height
-        const norm = (val - minVal) / (maxVal - minVal);
+        const norm = (data[i] - minVal) / (maxVal - minVal);
         const y = h - 5 - norm * (h - 10);
         const x = i * dx;
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
       ctx.stroke();
+
+      // Gradient fill underneath the line
+      if (!isEco) {
+        const fillPath = new Path2D();
+        for (let i = 0; i < data.length; i++) {
+          const norm = (data[i] - minVal) / (maxVal - minVal);
+          const y = h - 5 - norm * (h - 10);
+          const x = i * dx;
+          if (i === 0) fillPath.moveTo(x, y);
+          else fillPath.lineTo(x, y);
+        }
+        fillPath.lineTo((data.length - 1) * dx, h);
+        fillPath.lineTo(0, h);
+        fillPath.closePath();
+
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, gradTop);
+        grad.addColorStop(1, gradBot);
+        ctx.fillStyle = grad;
+        ctx.fill(fillPath);
+      }
       ctx.restore();
     };
 
     // Draw telemetry flows (scaled for comparison in single panel)
     // 1. Level (Blue) - scaled 0 to 100 %
-    drawLine(this.history.level, 0, 100, '#3b82f6', 'rgba(59, 130, 246, 0.4)');
+    drawAreaLine(this.history.level, 0, 100, '#3b82f6', 'rgba(59,130,246,0.18)', 'rgba(59,130,246,0.0)');
 
     // 2. Pressure (Amber/Crimson depending on danger)
     let pColor = '#ffaa00';
@@ -193,10 +251,17 @@ class ReactorPhysicsSim {
       pColor = '#ff0055';
       pGlow = 'rgba(255, 0, 85, 0.4)';
     }
-    drawLine(this.history.pressure, 0, 3.5, pColor, pGlow);
+    drawAreaLine(this.history.pressure, 0, 3.5, pColor, `rgba(255,170,0,0.15)`, `rgba(255,170,0,0.0)`);
 
     // 3. Temp (Cyan) - scaled 10 to 110 °C
-    drawLine(this.history.temp, 10, 110, '#00f0ff', 'rgba(0, 240, 255, 0.4)');
+    drawAreaLine(this.history.temp, 10, 110, '#00f0ff', 'rgba(0,240,255,0.12)', 'rgba(0,240,255,0.0)');
+
+    // IMP-6: Flashing alarm banner if pressure or temp is critical
+    if (this.alarmTriggered) {
+      const flashAlpha = 0.12 + 0.1 * Math.sin(Date.now() / 180);
+      ctx.fillStyle = `rgba(239,68,68,${flashAlpha})`;
+      ctx.fillRect(0, 0, w, h);
+    }
 
     // Render tiny glowing state labels in corner
     ctx.font = '600 8px var(--font-sans), sans-serif';
@@ -210,5 +275,16 @@ class ReactorPhysicsSim {
     
     ctx.fillStyle = '#00f0ff';
     ctx.fillText('TEMP °C', w - 10, 35);
+
+    // IMP-7: Mini live readout numerics at bottom left
+    ctx.textAlign = 'left';
+    ctx.font = '700 7px Fira Code';
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillText(`LVL ${this.level.toFixed(1)}%`, 6, h - 18);
+    ctx.fillStyle = pColor;
+    ctx.fillText(`PRS ${this.pressure.toFixed(2)}M`, 6, h - 10);
+    ctx.fillStyle = '#00f0ff';
+    ctx.fillText(`TMP ${this.temp.toFixed(1)}°C`, 60, h - 10);
   }
 }
+

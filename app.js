@@ -3636,6 +3636,7 @@ class DigitalTwinApp {
         if (this.activeProjectType === 'reactor') {
           this.sim.step(dt, this.speedDilation);
           this.orchestrator.evaluateState();
+          this.annotateReactorNodes();
         }
 
         // Periodically trigger OSPF dynamic routing synchronization (Upgrade 1)
@@ -3647,6 +3648,8 @@ class DigitalTwinApp {
         this.canvas.update(this.speedDilation);
         this.updateTickers();
         this.updateNetworkStats();
+        this.updateLinkUtilisation();
+        this.updateThreatVisuals();
 
         this.canvas.draw();
         if (this.activeProjectType === 'reactor') {
@@ -5892,9 +5895,482 @@ class DigitalTwinApp {
     if (role.includes('workstation') || role.includes('server')) ports.push({ port: 139, service: 'netbios-ssn' }, { port: 445, service: 'microsoft-ds' }, { port: 3389, service: 'ms-wbt-server' });
     return ports;
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-26: Sync canvas-container threat-active class for CSS hex overlay
+  // ═══════════════════════════════════════════════════════════════════════
+  syncThreatClass() {
+    const canvasContainer = document.querySelector('.canvas-container');
+    if (!canvasContainer) return;
+    const hasThreat = this.canvas.nodes.some(n => n.status === 'compromised');
+    canvasContainer.classList.toggle('threat-active', hasThreat);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-27: Keyboard shortcut handler (Ctrl+Z=Undo, Ctrl+Y=Redo, Space=Play/Pause, F=Fit, Delete=Del node)
+  // ═══════════════════════════════════════════════════════════════════════
+  initKeyboardShortcuts() {
+    window.addEventListener('keydown', (e) => {
+      // Don't capture when focused on input/textarea
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); this.undo(); }
+      else if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); this.redo(); }
+      else if (e.key === ' ') { e.preventDefault(); this.togglePlayPause(); }
+      else if (e.key === 'f' || e.key === 'F') { this.canvas.centerView(); this.canvas.draw(); }
+      else if (e.key === 'Delete' && this.canvas.selectedNode) { this.deleteCustomDevice(this.canvas.selectedNode); }
+      else if (e.key === 'Escape') {
+        this.canvas.selectedNode = null;
+        this.canvas.linkingSourceNode = null;
+        this.activePlacementTool = null;
+        this.updateSidebarProfile();
+        this.canvas.draw();
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-28: Right-click context menu on canvas nodes
+  // ═══════════════════════════════════════════════════════════════════════
+  initContextMenu() {
+    const canvasEl = document.getElementById('networkCanvas');
+    if (!canvasEl) return;
+
+    // Remove existing menu on any click
+    const removeMenu = () => {
+      const old = document.getElementById('ctxMenu');
+      if (old) old.remove();
+    };
+    document.addEventListener('click', removeMenu);
+
+    canvasEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      removeMenu();
+
+      const rect = canvasEl.getBoundingClientRect();
+      const world = this.canvas.toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      const node = this.canvas.getDeviceAt(world.x, world.y);
+      if (!node) return;
+
+      this.canvas.selectedNode = node;
+      this.onNodeSelected(node);
+
+      const menu = document.createElement('div');
+      menu.id = 'ctxMenu';
+      menu.style.cssText = `
+        position:fixed; left:${e.clientX}px; top:${e.clientY}px;
+        background:rgba(15,23,42,0.98); border:1px solid rgba(56,189,248,0.3);
+        border-radius:8px; padding:4px 0; z-index:9999; min-width:160px;
+        box-shadow:0 8px 24px rgba(0,0,0,0.6); font-size:0.72rem;
+      `;
+
+      const actions = [
+        { label: '🔍 Inspect Device', fn: () => this.openPhysicalInspector(node) },
+        { label: '💻 Open CLI Session', fn: () => this.openCliForNode(node) },
+        { label: '📋 Clone Node', fn: () => this.cloneNode(node) },
+        { label: '📍 Pin / Unpin', fn: () => { node.pinned = !node.pinned; this.canvas.draw(); } },
+        { label: '⚠️ Mark Compromised', fn: () => { node.status = 'compromised'; this.canvas.draw(); this.orchestrator.evaluateState(); } },
+        { label: '✅ Mark Stable', fn: () => { node.status = 'stable'; this.canvas.draw(); } },
+        { label: '🗑 Delete Node', fn: () => this.deleteCustomDevice(node) },
+      ];
+
+      actions.forEach(a => {
+        const item = document.createElement('div');
+        item.textContent = a.label;
+        item.style.cssText = 'padding:7px 14px; cursor:pointer; color:#cbd5e1; transition:background 0.15s;';
+        item.onmouseenter = () => item.style.background = 'rgba(56,189,248,0.1)';
+        item.onmouseleave = () => item.style.background = '';
+        item.onclick = () => { a.fn(); removeMenu(); };
+        menu.appendChild(item);
+      });
+
+      document.body.appendChild(menu);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-29: Clone a node (duplicate with slight position offset)
+  // ═══════════════════════════════════════════════════════════════════════
+  cloneNode(node) {
+    const newId = node.id + '-COPY-' + Date.now().toString(36).slice(-4).toUpperCase();
+    const newNode = {
+      ...JSON.parse(JSON.stringify(node)),
+      id: newId,
+      name: node.name + ' (Copy)',
+      x: node.x + 60,
+      y: node.y + 40,
+      status: 'stable',
+    };
+    this.canvas.addNode(newNode);
+    this.saveState();
+    this.showToast(`Cloned: ${newId}`, 'info');
+    this.canvas.draw();
+    this.orchestrator.logSystem(`Node cloned: ${node.id} → ${newId}`, 'info');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-30: Smooth animate-to-node camera pan (click on node in audit pane)
+  // ═══════════════════════════════════════════════════════════════════════
+  animateCameraToNode(nodeId) {
+    const node = this.canvas.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const targetPanX = this.canvas.canvas.width / 2 - node.x * this.canvas.scale;
+    const targetPanY = this.canvas.canvas.height / 2 - node.y * this.canvas.scale;
+    const startPanX = this.canvas.panX;
+    const startPanY = this.canvas.panY;
+    const duration = 500;
+    const startTime = performance.now();
+    const animate = (now) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      this.canvas.panX = startPanX + (targetPanX - startPanX) * ease;
+      this.canvas.panY = startPanY + (targetPanY - startPanY) * ease;
+      this.canvas.draw();
+      if (t < 1) requestAnimationFrame(animate);
+      else {
+        this.canvas.selectedNode = node;
+        this.onNodeSelected(node);
+      }
+    };
+    requestAnimationFrame(animate);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-31: Node search / filter highlight
+  // ═══════════════════════════════════════════════════════════════════════
+  searchNodes(query) {
+    const q = (query || '').toLowerCase().trim();
+    this.canvas.nodes.forEach(n => {
+      n._searchMatch = !q || n.id.toLowerCase().includes(q) || n.name.toLowerCase().includes(q) || n.ip.toLowerCase().includes(q) || (n.role || '').toLowerCase().includes(q);
+    });
+    this.canvas.draw();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-32: Topology statistics summary (counts per type + threat ratio)
+  // ═══════════════════════════════════════════════════════════════════════
+  getTopologyStats() {
+    const nodes = this.canvas.nodes;
+    const stats = {
+      total: nodes.length,
+      it: nodes.filter(n => n.type === 'it').length,
+      ot: nodes.filter(n => n.type === 'ot').length,
+      plc: nodes.filter(n => n.type === 'plc').length,
+      field: nodes.filter(n => n.type === 'field').length,
+      compromised: nodes.filter(n => n.status === 'compromised').length,
+      isolated: nodes.filter(n => n.status === 'isolated').length,
+      links: this.canvas.links.length,
+      encryptedLinks: this.canvas.links.filter(l => l.encrypted).length,
+    };
+    return stats;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-33: Simulation speed preset selector
+  // ═══════════════════════════════════════════════════════════════════════
+  setSpeedPreset(preset) {
+    const presets = { slow: 0.25, normal: 1.0, fast: 3.0, ultra: 8.0 };
+    const speed = presets[preset] || 1.0;
+    this.speedDilation = speed;
+    const sliderEl = document.getElementById('speedSlider');
+    if (sliderEl) sliderEl.value = speed;
+    const lblEl = document.getElementById('speedLabel');
+    if (lblEl) lblEl.textContent = speed + 'x';
+    this.showToast(`Simulation speed: ${preset.toUpperCase()} (${speed}x)`, 'info');
+    this.orchestrator.logSystem(`Speed preset: ${preset} → ${speed}x`, 'info');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-34: Toggle fullscreen canvas mode
+  // ═══════════════════════════════════════════════════════════════════════
+  toggleFullscreenCanvas() {
+    const canvasWrapper = document.querySelector('.canvas-wrapper') || document.querySelector('.canvas-container');
+    if (!canvasWrapper) return;
+    if (!document.fullscreenElement) {
+      canvasWrapper.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-35: Update link utilisation values periodically for traffic viz
+  // ═══════════════════════════════════════════════════════════════════════
+  updateLinkUtilisation() {
+    this.canvas.links.forEach(link => {
+      if (link.status !== 'normal') return;
+      // Simulate realistic traffic load that fluctuates
+      const seed = Date.now() / 3000 + link.sourceId.charCodeAt(0);
+      link.speed = Math.max(1, Math.min(100, 
+        20 + Math.sin(seed) * 18 + Math.cos(seed * 1.7) * 12
+      ));
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-36: Incident badge count on tab header
+  // ═══════════════════════════════════════════════════════════════════════
+  updateIncidentBadge() {
+    const badge = document.getElementById('incidentTabBadge');
+    const count = this.orchestrator.alerts.filter(a => !a.resolved).length;
+    if (badge) {
+      badge.textContent = count > 0 ? count : '';
+      badge.style.display = count > 0 ? 'inline-block' : 'none';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-37: SCADA alarm audio toggle (plays Web Audio API beep on alarm)
+  // ═══════════════════════════════════════════════════════════════════════
+  initAlarmAudio() {
+    this._alarmEnabled = false;
+    this._alarmActive = false;
+    this._audioCtx = null;
+  }
+
+  playAlarmBeep() {
+    if (!this._alarmEnabled) return;
+    try {
+      if (!this._audioCtx) this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = this._audioCtx.createOscillator();
+      const gain = this._audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(this._audioCtx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, this._audioCtx.currentTime);
+      osc.frequency.setValueAtTime(660, this._audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.05, this._audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this._audioCtx.currentTime + 0.35);
+      osc.start(this._audioCtx.currentTime);
+      osc.stop(this._audioCtx.currentTime + 0.35);
+    } catch (e) { /* audio not available */ }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-38: Canvas PNG export with Aetheris watermark
+  // ═══════════════════════════════════════════════════════════════════════
+  exportCanvasPngWithWatermark() {
+    const w = this.canvas.canvas.width;
+    const h = this.canvas.canvas.height;
+
+    // Draw watermark on a temporary overlay canvas
+    const overlay = document.createElement('canvas');
+    overlay.width = w;
+    overlay.height = h;
+    const octx = overlay.getContext('2d');
+    octx.drawImage(this.canvas.canvas, 0, 0);
+
+    octx.fillStyle = 'rgba(56,189,248,0.25)';
+    octx.font = '700 11px Fira Code';
+    octx.textAlign = 'right';
+    octx.fillText('AETHERIS DIGITAL TWIN — CONFIDENTIAL', w - 12, h - 10);
+
+    const url = overlay.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aetheris-topology-${Date.now()}.png`;
+    a.click();
+    this.showToast('Topology exported as PNG with watermark.', 'success');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-39: Play/Pause toggle helper
+  // ═══════════════════════════════════════════════════════════════════════
+  togglePlayPause() {
+    const btn = document.getElementById('btnPlayPause');
+    const txt = document.getElementById('txtPlayPause');
+    this.isPlaying = !this.isPlaying;
+    if (txt) txt.textContent = this.isPlaying ? '⏸ PAUSE' : '▶ RESUME';
+    this.orchestrator.logSystem(this.isPlaying ? 'Simulation resumed.' : 'Simulation paused.', 'info');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-40: Open CLI session for a node directly by reference
+  // ═══════════════════════════════════════════════════════════════════════
+  openCliForNode(node) {
+    this.canvas.selectedNode = node;
+    this.onNodeSelected(node);
+    // Switch to the CLI tab
+    const cliTab = document.querySelector('[data-tab="cli"]') || document.getElementById('tabCLI');
+    if (cliTab) cliTab.click();
+    this.showToast(`CLI session opened: ${node.id}`, 'info');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-41: Link between devices annotated with auto-discovered protocol
+  // ═══════════════════════════════════════════════════════════════════════
+  annotateLinksWithProtocol() {
+    this.canvas.links.forEach(link => {
+      const src = this.canvas.nodes.find(n => n.id === link.sourceId);
+      const tgt = this.canvas.nodes.find(n => n.id === link.targetId);
+      if (!src || !tgt || link.protocol) return;
+
+      const srcRole = (src.role || '').toLowerCase();
+      const tgtRole = (tgt.role || '').toLowerCase();
+
+      if (srcRole.includes('plc') || tgtRole.includes('plc')) link.protocol = 'Modbus/TCP';
+      else if (srcRole.includes('router') || tgtRole.includes('router')) link.protocol = 'OSPF/BGP';
+      else if (srcRole.includes('firewall') || tgtRole.includes('firewall')) link.protocol = 'IPSec/TLS';
+      else if (srcRole.includes('hmi') || tgtRole.includes('hmi')) link.protocol = 'OPC-UA';
+      else link.protocol = 'Ethernet';
+
+      if (!link.speed) link.speed = 100;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-42: Select all nodes in a zone type
+  // ═══════════════════════════════════════════════════════════════════════
+  selectNodesByType(type) {
+    this.canvas.nodes.forEach(n => { n._selected = n.type === type; });
+    const matches = this.canvas.nodes.filter(n => n._selected);
+    this.showToast(`Selected ${matches.length} ${type.toUpperCase()} nodes`, 'info');
+    this.canvas.draw();
+    return matches;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-43: Heatmap overlay mode — colour nodes by threat level
+  // ═══════════════════════════════════════════════════════════════════════
+  toggleHeatmapMode() {
+    this.heatmapMode = !this.heatmapMode;
+    this.canvas.heatmapMode = this.heatmapMode;
+    this.showToast(`Heatmap mode: ${this.heatmapMode ? 'ON' : 'OFF'}`, 'info');
+    this.canvas.draw();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-44: Batch set all link encryption states
+  // ═══════════════════════════════════════════════════════════════════════
+  setAllLinksEncrypted(encrypted) {
+    this.canvas.links.forEach(link => { link.encrypted = encrypted; });
+    this.saveState();
+    this.canvas.draw();
+    this.showToast(`All links marked ${encrypted ? 'ENCRYPTED' : 'UNENCRYPTED'}`, encrypted ? 'success' : 'warning');
+    this.orchestrator.logSystem(`Bulk link encryption policy: ${encrypted ? 'ENABLED' : 'DISABLED'}`, encrypted ? 'success' : 'warning');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-45: Generate a PDF-ready incident report string
+  // ═══════════════════════════════════════════════════════════════════════
+  generateIncidentReport() {
+    const stats = this.getTopologyStats();
+    const alerts = this.orchestrator.alerts;
+    const lines = [
+      `AETHERIS DIGITAL TWIN — INCIDENT REPORT`,
+      `Generated: ${new Date().toISOString()}`,
+      `Project: ${this.activeProject}`,
+      ``,
+      `TOPOLOGY SUMMARY`,
+      `  Total Nodes : ${stats.total}`,
+      `  IT Devices  : ${stats.it}`,
+      `  OT Devices  : ${stats.ot}`,
+      `  PLCs        : ${stats.plc}`,
+      `  Field Assets: ${stats.field}`,
+      `  Links       : ${stats.links}  (Encrypted: ${stats.encryptedLinks})`,
+      `  Compromised : ${stats.compromised}`,
+      `  Isolated    : ${stats.isolated}`,
+      ``,
+      `ACTIVE ALERTS (${alerts.filter(a => !a.resolved).length})`,
+      ...alerts.filter(a => !a.resolved).map(a => `  [${a.severity.toUpperCase()}] ${a.time} — ${a.title}: ${a.message}`),
+      ``,
+      `INCIDENT TIMELINE (${(this.incidentTimeline||[]).length} events)`,
+      ...(this.incidentTimeline||[]).map(e => `  [${e.time}] ${e.severity.toUpperCase()} — ${e.message}`),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aetheris-incident-report-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.showToast('Incident report exported.', 'success');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-46: Reactive threat class + alarm audio tick (called each loop frame)
+  // ═══════════════════════════════════════════════════════════════════════
+  updateThreatVisuals() {
+    this.syncThreatClass();
+    this.updateIncidentBadge();
+    const compromised = this.canvas.nodes.some(n => n.status === 'compromised');
+    if (compromised && !this._alarmActive) {
+      this._alarmActive = true;
+      this.playAlarmBeep();
+    } else if (!compromised) {
+      this._alarmActive = false;
+    }
+
+    // Chart border alarm
+    const chartPanel = document.querySelector('.chart-panel') || document.getElementById('telemetryChart')?.parentElement;
+    if (chartPanel) {
+      if (this.sim && (this.sim.pressure > 2.0 || this.sim.temp > 80)) {
+        chartPanel.classList.add('chart-alarm-border');
+      } else {
+        chartPanel.classList.remove('chart-alarm-border');
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-47: Add CLI blinking cursor element
+  // ═══════════════════════════════════════════════════════════════════════
+  initCliCursor() {
+    const cliOutput = document.getElementById('cliOutput');
+    if (!cliOutput) return;
+    const cursor = document.createElement('span');
+    cursor.className = 'cli-cursor';
+    cliOutput.appendChild(cursor);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-48: Update network stats to include link utilisation call
+  // ═══════════════════════════════════════════════════════════════════════
+  updateAllStats() {
+    this.updateNetworkStats();
+    this.updateLinkUtilisation();
+    this.updateThreatVisuals();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-49: Annotate reactor sensor nodes with live sim values in label
+  // ═══════════════════════════════════════════════════════════════════════
+  annotateReactorNodes() {
+    if (this.activeProjectType !== 'reactor' || !this.sim) return;
+    const t300 = this.canvas.nodes.find(n => n.id === 'T-300');
+    if (t300) t300._liveAnnotation = `${this.sim.level.toFixed(0)}%`;
+    const v101 = this.canvas.nodes.find(n => n.id === 'V-101');
+    if (v101) v101._liveAnnotation = `V:${this.sim.inletValve}%`;
+    const v102 = this.canvas.nodes.find(n => n.id === 'V-102');
+    if (v102) v102._liveAnnotation = `V:${this.sim.outletValve}%`;
+    const xv103 = this.canvas.nodes.find(n => n.id === 'XV-103');
+    if (xv103) xv103._liveAnnotation = this.sim.reliefValve ? 'OPEN' : 'CLOSED';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMP-50: Register all improvements, wire up keyboard, context menu, alarm audio
+  // ═══════════════════════════════════════════════════════════════════════
+  initAllImprovements() {
+    this.initKeyboardShortcuts();
+    this.initContextMenu();
+    this.initAlarmAudio();
+    this.initCliCursor();
+    this.annotateLinksWithProtocol();
+    this.orchestrator.logSystem('50-improvement bundle loaded. Keyboard shortcuts, context menu, and alarm audio active.', 'success');
+    // Pre-populate link speed/protocol for the default reactor topology
+    setTimeout(() => {
+      this.annotateLinksWithProtocol();
+      this.updateLinkUtilisation();
+      this.canvas.draw();
+    }, 500);
+  }
 }
 
 // Instantiate the App upon window loading
 window.addEventListener('DOMContentLoaded', () => {
   window.appInstance = new DigitalTwinApp();
+  // Wire up all improvements after the app is ready
+  setTimeout(() => window.appInstance.initAllImprovements(), 800);
 });
+

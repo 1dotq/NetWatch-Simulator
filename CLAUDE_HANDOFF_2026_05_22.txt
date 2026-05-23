@@ -352,6 +352,10 @@ ReactorPhysicsSim state:
   IMP-50: initAllImprovements() — bootstrapper that calls all init methods,
           called at 800ms after DOMContentLoaded
 
+  HOTFIX: Slowed animated traffic dot speed from Date.now()/600 to Date.now()/2500
+          Each dot now takes 2.5 seconds per full link traversal (was 0.6s)
+          File: network-canvas.js — drawLink(), IMP-11 block
+
   Also wired into main loop (app.js loop()):
     - annotateReactorNodes() called each reactor tick
     - updateLinkUtilisation() called each frame

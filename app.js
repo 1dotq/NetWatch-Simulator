@@ -58,6 +58,16 @@ class DigitalTwinApp {
     // Power Grid Substation Sim instance
     this.simGrid = new PowerGridSim();
 
+    // AI Battle Mode
+    this.battle = new BattleSimulator(this);
+    this.battle.onUpdate = () => this._updateBattleUI();
+    this.battlePanelOpen = false;
+    this.battleCurrentTab = 'log';
+
+    // Multiplayer session
+    this.mpSession = new MultiplayerSession(this);
+    this._initMpHandlers();
+
     // Performance Mode: default to 'eco' (Wireframe) for fluidity, but honor a
     // previously saved user preference.
     let savedPerf = 'eco';
@@ -4722,6 +4732,11 @@ class DigitalTwinApp {
           this.tickChallenge(dt);
         }
 
+        // AI Battle simulation tick
+        if (this.battle && this.battle.active) {
+          this.battle.tick();
+        }
+
         // Periodically trigger OSPF dynamic routing synchronization (Upgrade 1)
         if (!this.lastOspfTick || this.simTime - this.lastOspfTick > 5000) {
           this.ospfHelloTick();
@@ -8129,13 +8144,319 @@ class DigitalTwinApp {
     this.initWaterTreatmentUI();
     this.initGridUI();
     this.initFacilityMap();
-    this.orchestrator.logSystem('50-improvement bundle + Tasks 11/16/17/19 + Power Grid twin loaded.', 'success');
+    this.initBattleUI();
+    this.orchestrator.logSystem('50-improvement bundle + Tasks 11/16/17/19 + Power Grid twin + Battle Mode loaded.', 'success');
     // Pre-populate link speed/protocol for the default reactor topology
     setTimeout(() => {
       this.annotateLinksWithProtocol();
       this.updateLinkUtilisation();
       this.canvas.draw();
     }, 500);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // BATTLE MODE — AI vs AI Red/Blue Team Simulation
+  // ══════════════════════════════════════════════════════════════════════════
+
+  initBattleUI() {
+    // Nothing to wire — buttons call methods directly via onclick
+  }
+
+  toggleBattlePanel() {
+    const panel = document.getElementById('battleModePanel');
+    if (!panel) return;
+    this.battlePanelOpen = !this.battlePanelOpen;
+    panel.style.display = this.battlePanelOpen ? 'flex' : 'none';
+    const btn = document.getElementById('btnBattleMode');
+    if (btn) {
+      btn.style.background = this.battlePanelOpen ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.07)';
+      btn.style.borderColor = this.battlePanelOpen ? 'rgba(239,68,68,0.7)' : 'rgba(239,68,68,0.5)';
+    }
+  }
+
+  closeBattlePanel() {
+    this.battlePanelOpen = false;
+    const panel = document.getElementById('battleModePanel');
+    if (panel) panel.style.display = 'none';
+    const btn = document.getElementById('btnBattleMode');
+    if (btn) { btn.style.background = 'rgba(239,68,68,0.07)'; btn.style.borderColor = 'rgba(239,68,68,0.5)'; }
+  }
+
+  startAIBattle() {
+    this.battle.start(this.battle.speed || 1.0);
+    const btn = document.getElementById('btnBattleStart');
+    if (btn) { btn.textContent = '▶ RUNNING'; btn.style.color = '#22c55e'; btn.style.borderColor = 'rgba(34,197,94,0.5)'; }
+    document.getElementById('battleWinBanner')?.style && (document.getElementById('battleWinBanner').style.display = 'none');
+    this._updateBattleUI();
+    this.orchestrator.logSystem('AI Red vs Blue battle simulation started.', 'warning');
+  }
+
+  pauseAIBattle() {
+    if (!this.battle.active) return;
+    this.battle.pause();
+    const btn = document.getElementById('btnBattlePause');
+    if (btn) btn.textContent = this.battle.paused ? '▶' : '⏸';
+  }
+
+  resetAIBattle() {
+    this.battle.stop();
+    // Restore all node statuses
+    this.canvas.nodes.forEach(n => { if (n.status === 'compromised' || n.status === 'isolated') n.status = 'stable'; });
+    const btn = document.getElementById('btnBattleStart');
+    if (btn) { btn.textContent = '▶ START SIM'; btn.style.color = '#ef4444'; btn.style.borderColor = 'rgba(239,68,68,0.4)'; }
+    document.getElementById('battleWinBanner')?.style && (document.getElementById('battleWinBanner').style.display = 'none');
+    this._updateBattleUI();
+  }
+
+  setBattleSpeed(s) {
+    this.battle.setSpeed(s);
+    // Highlight active speed button
+    document.querySelectorAll('.battle-speed-btn').forEach(b => {
+      const active = parseFloat(b.dataset.speed) === s;
+      b.style.background = active ? 'rgba(45,125,210,0.2)' : 'rgba(45,125,210,0.04)';
+      b.style.borderColor = active ? 'rgba(45,125,210,0.5)' : 'rgba(255,255,255,0.1)';
+      b.style.color = active ? '#60a5fa' : 'var(--text-muted)';
+    });
+  }
+
+  switchBattleTab(tab) {
+    this.battleCurrentTab = tab;
+    const logPane = document.getElementById('battleLogPane');
+    const mpPane  = document.getElementById('battleMpPane');
+    const tabLog  = document.getElementById('battleTabLog');
+    const tabMp   = document.getElementById('battleTabMp');
+    if (!logPane || !mpPane) return;
+
+    if (tab === 'log') {
+      logPane.style.display = 'flex';
+      mpPane.style.display  = 'none';
+      tabLog.style.borderBottomColor = '#ef4444'; tabLog.style.color = '#ef4444'; tabLog.style.background = 'rgba(239,68,68,0.06)';
+      tabMp.style.borderBottomColor  = 'transparent'; tabMp.style.color = 'var(--text-muted)'; tabMp.style.background = 'transparent';
+    } else {
+      logPane.style.display = 'none';
+      mpPane.style.display  = 'block';
+      tabMp.style.borderBottomColor  = '#2d7dd2'; tabMp.style.color = '#60a5fa'; tabMp.style.background = 'rgba(45,125,210,0.06)';
+      tabLog.style.borderBottomColor = 'transparent'; tabLog.style.color = 'var(--text-muted)'; tabLog.style.background = 'transparent';
+    }
+  }
+
+  _updateBattleUI() {
+    const b = this.battle;
+    if (!b) return;
+
+    // Timer
+    const timerEl = document.getElementById('battleTimer');
+    if (timerEl) timerEl.textContent = b.active || b.winner ? b.elapsedLabel : '00:00';
+
+    // Scores
+    const redScoreEl = document.getElementById('battleRedScore');
+    const blueScoreEl = document.getElementById('battleBlueScore');
+    if (redScoreEl)  redScoreEl.textContent  = b.red.score.toLocaleString();
+    if (blueScoreEl) blueScoreEl.textContent = b.blue.score.toLocaleString();
+
+    // Phases
+    const redPhaseEl = document.getElementById('battleRedPhase');
+    const bluePhaseEl = document.getElementById('battleBluePhase');
+    if (redPhaseEl)  redPhaseEl.textContent  = b.red.phase.replace('_', ' ').toUpperCase();
+    if (bluePhaseEl) bluePhaseEl.textContent = b.blue.phase.replace('_', ' ').toUpperCase();
+
+    // Node counts
+    const nodes = this.canvas.nodes;
+    const compromised = nodes.filter(n => n.status === 'compromised').length;
+    const isolated    = nodes.filter(n => n.status === 'isolated').length;
+    const safe        = nodes.filter(n => n.status === 'stable' || n.status === 'online').length;
+    const cc = document.getElementById('battleCompromisedCount');
+    const ic = document.getElementById('battleIsolatedCount');
+    const sc = document.getElementById('battleSafeCount');
+    if (cc) cc.textContent = compromised;
+    if (ic) ic.textContent = isolated;
+    if (sc) sc.textContent = safe;
+
+    // Status label
+    const statusLabel = document.getElementById('battleStatusLabel');
+    if (statusLabel) {
+      if (b.winner)       statusLabel.textContent = b.winner === 'red' ? 'Red Team Victory' : 'Blue Team Victory';
+      else if (b.paused)  statusLabel.textContent = 'Simulation Paused';
+      else if (b.active)  statusLabel.textContent = 'AI vs AI — Live';
+      else                statusLabel.textContent = 'AI vs AI Simulation';
+    }
+
+    // Win banner
+    const winBanner = document.getElementById('battleWinBanner');
+    const winText   = document.getElementById('battleWinText');
+    const winSub    = document.getElementById('battleWinSub');
+    if (winBanner && b.winner) {
+      winBanner.style.display = 'block';
+      if (b.winner === 'red') {
+        winBanner.style.background = 'rgba(239,68,68,0.12)';
+        winBanner.style.borderColor = 'rgba(239,68,68,0.3)';
+        if (winText) { winText.textContent = '🔴 RED TEAM WINS'; winText.style.color = '#ef4444'; }
+        if (winSub)  winSub.textContent = `Critical infrastructure compromised in ${b.elapsedLabel}. Score: ${b.red.score.toLocaleString()}`;
+      } else {
+        winBanner.style.background = 'rgba(45,125,210,0.12)';
+        winBanner.style.borderColor = 'rgba(45,125,210,0.3)';
+        if (winText) { winText.textContent = '🔵 BLUE TEAM WINS'; winText.style.color = '#60a5fa'; }
+        if (winSub)  winSub.textContent = `All threats contained in ${b.elapsedLabel}. Score: ${b.blue.score.toLocaleString()}`;
+      }
+    } else if (winBanner && !b.winner) {
+      winBanner.style.display = 'none';
+    }
+
+    // Battle log feed
+    this._renderBattleLog();
+  }
+
+  _renderBattleLog() {
+    const container = document.getElementById('battleLogPane');
+    if (!container) return;
+    const empty = document.getElementById('battleLogEmpty');
+    const log = this.battle.combinedLog;
+
+    if (log.length === 0) {
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    // Build new entries (only add new ones to avoid full re-render jank)
+    const existing = container.querySelectorAll('.battle-entry').length;
+    if (existing >= log.length && existing > 0) return;
+
+    container.innerHTML = '';
+    log.forEach(entry => {
+      const el = document.createElement('div');
+      el.className = 'battle-entry';
+      const isRed = entry.team === 'red';
+      const tagColors = {
+        RECON: '#94a3b8', INITIAL_ACCESS: '#f97316', LATERAL_MOVE: '#ef4444',
+        PRIV_ESC: '#dc2626', OBJECTIVE: '#7f1d1d',
+        MONITOR: '#60a5fa', DETECT: '#fbbf24', INVESTIGATE: '#a78bfa',
+        CONTAIN: '#2d7dd2', RECOVER: '#22c55e',
+      };
+      const tagColor = tagColors[entry.tag] || (isRed ? '#ef4444' : '#60a5fa');
+      const time = new Date(entry.ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      el.style.cssText = `display:flex;flex-direction:column;gap:1px;padding:5px 6px;background:${isRed ? 'rgba(239,68,68,0.05)' : 'rgba(45,125,210,0.05)'};border-left:2px solid ${tagColor};border-radius:3px;`;
+      el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span style="font-size:0.5rem;font-weight:700;color:${tagColor};letter-spacing:0.06em;white-space:nowrap;">${isRed ? '🔴' : '🔵'} ${entry.tag}</span>
+          <span style="font-size:0.48rem;color:var(--text-muted);margin-left:auto;">${time}</span>
+        </div>
+        <div style="font-size:0.57rem;color:${isRed ? 'rgba(252,165,165,0.9)' : 'rgba(147,197,253,0.9)'};line-height:1.35;">${entry.msg}</div>
+      `;
+      container.appendChild(el);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // MULTIPLAYER SESSION METHODS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  _initMpHandlers() {
+    this.mpSession.onPeerConnected = (peerRole) => {
+      this._mpLog(`Peer connected as ${peerRole.toUpperCase()} team`);
+      this._updateMpStatus();
+    };
+    this.mpSession.onPeerDisconnected = () => {
+      this._mpLog('Peer disconnected');
+      this._updateMpStatus();
+    };
+    this.mpSession.onMessage = (msg) => {
+      if (msg.type === 'ATTACK_NODE') {
+        const node = this.canvas.nodes.find(n => n.id === msg.nodeId);
+        this._mpLog(`⚡ ${msg._sender?.toUpperCase() || 'PEER'} attacked ${node?.name || msg.nodeId}`);
+      } else if (msg.type === 'DEFEND_NODE') {
+        const node = this.canvas.nodes.find(n => n.id === msg.nodeId);
+        this._mpLog(`🛡 ${msg._sender?.toUpperCase() || 'PEER'} defended ${node?.name || msg.nodeId}`);
+      }
+    };
+    this.mpSession.onStateSync = (nodeStates) => {
+      nodeStates.forEach(s => {
+        const node = this.canvas.nodes.find(n => n.id === s.id);
+        if (node) { node.status = s.status; node.x = s.x; node.y = s.y; }
+      });
+      this._mpLog('Topology state synchronized from host');
+    };
+  }
+
+  mpHost() {
+    if (this.mpSession.sessionId) this.mpSession.disconnect();
+    const id = this.mpSession.createSession();
+    const display = document.getElementById('mpSessionIdDisplay');
+    const idText  = document.getElementById('mpSessionIdText');
+    if (display) display.style.display = 'block';
+    if (idText)  idText.textContent = id;
+    this._mpLog(`Session created — ID: ${id} — waiting for attacker...`);
+    this._updateMpStatus();
+  }
+
+  mpJoin() {
+    const input = document.getElementById('mpJoinInput');
+    const id = input?.value?.trim();
+    if (!id || id.length < 4) { this._mpLog('Enter a valid 6-character session ID'); return; }
+    if (this.mpSession.sessionId) this.mpSession.disconnect();
+    this.mpSession.joinSession(id);
+    this._mpLog(`Joining session ${id} as RED TEAM...`);
+    this._updateMpStatus();
+  }
+
+  mpDisconnect() {
+    this.mpSession.disconnect();
+    const display = document.getElementById('mpSessionIdDisplay');
+    if (display) display.style.display = 'none';
+    const input = document.getElementById('mpJoinInput');
+    if (input) input.value = '';
+    this._mpLog('Session disconnected');
+    this._updateMpStatus();
+  }
+
+  mpAttackSelected() {
+    if (!this.mpSession.sessionId) { this._mpLog('Join or create a session first'); return; }
+    const node = this.canvas.selectedNode;
+    if (!node) { this._mpLog('Select a node on the canvas first'); return; }
+    this.mpSession.sendAttack(node.id);
+    this._mpLog(`⚡ You attacked ${node.name || node.id}`);
+  }
+
+  mpDefendSelected() {
+    if (!this.mpSession.sessionId) { this._mpLog('Join or create a session first'); return; }
+    const node = this.canvas.selectedNode;
+    if (!node) { this._mpLog('Select a node on the canvas first'); return; }
+    this.mpSession.sendDefend(node.id);
+    this._mpLog(`🛡 You defended ${node.name || node.id}`);
+  }
+
+  _mpLog(msg) {
+    const container = document.getElementById('mpActionLog');
+    if (!container) return;
+    const el = document.createElement('div');
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    el.style.cssText = 'padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--text-secondary);';
+    el.innerHTML = `<span style="color:var(--text-muted);font-size:0.5rem;">${time}</span> <span style="font-size:0.58rem;">${msg}</span>`;
+    container.insertBefore(el, container.firstChild);
+    if (container.children.length > 30) container.removeChild(container.lastChild);
+  }
+
+  _updateMpStatus() {
+    const mp = this.mpSession;
+    const statusText = document.getElementById('mpStatusText');
+    const disconnectBtn = document.getElementById('mpDisconnectBtn');
+    if (!statusText) return;
+
+    if (!mp.sessionId) {
+      statusText.innerHTML = '<span style="color:var(--text-muted);">No active session</span>';
+      if (disconnectBtn) disconnectBtn.style.display = 'none';
+    } else {
+      const roleColor = mp.role === 'red' ? '#ef4444' : '#60a5fa';
+      const peerStatus = mp.peerConnected ? `<span style="color:#22c55e;">● PEER CONNECTED</span>` : `<span style="color:#fbbf24;">● Waiting for peer...</span>`;
+      statusText.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div>Session: <span style="font-family:var(--font-mono);color:#00d4ff;font-weight:700;letter-spacing:0.1em;">${mp.sessionId}</span></div>
+          <div>Role: <span style="color:${roleColor};font-weight:700;">${mp.role?.toUpperCase()} TEAM</span></div>
+          <div>${peerStatus}</div>
+        </div>
+      `;
+      if (disconnectBtn) disconnectBtn.style.display = 'block';
+    }
   }
 }
 

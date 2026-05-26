@@ -7,6 +7,7 @@ class NetworkTwinCanvas {
     this.nodes = [];
     this.links = [];
     this.particles = [];
+    this.battleEffects = []; // [{nodeId, team, startTs, duration}]
 
     // Transform parameters
     this.scale = 1.0;
@@ -774,6 +775,9 @@ class NetworkTwinCanvas {
     this.nodes.forEach(node => {
       this.drawNode(node);
     });
+
+    // 4.5 Battle effect overlays (attack/defend flashes)
+    this._drawBattleEffects();
 
     // 5. Draw Interactive Hover Tooltips (Cisco Telemetry Overlay Upgrades!)
     if (this.hoveredNode) {
@@ -2730,6 +2734,92 @@ class NetworkTwinCanvas {
     if (r.includes('hmi') || r.includes('scada')) return 'Windows LTSC 2021';
     if (r.includes('soc') || r.includes('security')) return 'Linux (Hardened)';
     return 'Linux / Generic Host';
+  }
+
+  // ── Battle Mode Visual Effects ─────────────────────────────────────────────
+
+  flashBattleEffect(nodeId, team) {
+    // Replace existing effect on same node
+    this.battleEffects = this.battleEffects.filter(e => e.nodeId !== nodeId);
+    this.battleEffects.push({ nodeId, team, startTs: Date.now(), duration: 1400 });
+  }
+
+  _drawBattleEffects() {
+    if (!this.battleEffects || this.battleEffects.length === 0) return;
+    const now = Date.now();
+    const ctx = this.ctx;
+    this.battleEffects = this.battleEffects.filter(e => now - e.startTs < e.duration);
+
+    for (const e of this.battleEffects) {
+      const node = this.nodes.find(n => n.id === e.nodeId);
+      if (!node) continue;
+      const t = (now - e.startTs) / e.duration; // 0→1
+      const alpha = Math.sin(t * Math.PI) * 0.85; // rises then falls
+
+      ctx.save();
+      if (e.team === 'red') {
+        // Attack: expanding red ring + crosshair
+        const r = 22 + t * 28;
+        ctx.strokeStyle = `rgba(239,68,68,${alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = `rgba(239,68,68,${alpha * 0.7})`;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Second ring slightly behind
+        ctx.strokeStyle = `rgba(239,68,68,${alpha * 0.45})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 10, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Crosshair lines
+        const len = 14;
+        ctx.strokeStyle = `rgba(239,68,68,${alpha * 0.7})`;
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 0;
+        [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dy]) => {
+          ctx.beginPath();
+          ctx.moveTo(node.x + dx * (r - 5), node.y + dy * (r - 5));
+          ctx.lineTo(node.x + dx * (r + len), node.y + dy * (r + len));
+          ctx.stroke();
+        });
+      } else {
+        // Defend: blue shield flash + contracting ring
+        const r = 40 - t * 20;
+        ctx.strokeStyle = `rgba(45,125,210,${alpha})`;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = `rgba(0,212,255,${alpha * 0.6})`;
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Fill glow
+        ctx.fillStyle = `rgba(45,125,210,${alpha * 0.10})`;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Check mark
+        if (t > 0.3 && t < 0.9) {
+          const ca = alpha * 1.2;
+          ctx.strokeStyle = `rgba(34,197,94,${Math.min(1, ca)})`;
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = `rgba(34,197,94,0.6)`;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.moveTo(node.x - 7, node.y + 1);
+          ctx.lineTo(node.x - 1, node.y + 8);
+          ctx.lineTo(node.x + 9, node.y - 6);
+          ctx.stroke();
+        }
+      }
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
   }
 }
 

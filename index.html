@@ -245,6 +245,9 @@
         <button id="btnChallenge" type="button" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(251,191,36,0.5);color:#fbbf24;background:rgba(251,191,36,0.07);" title="Start Timed Challenge Mode">
           ⏱ CHALLENGE
         </button>
+        <button id="btnBattleMode" type="button" onclick="window.appInstance?.toggleBattlePanel()" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(239,68,68,0.5);color:#ef4444;background:rgba(239,68,68,0.07);" title="Open AI Red vs Blue Battle Mode">
+          ⚔ BATTLE
+        </button>
         <button id="btnResetTwin" type="button" class="cyber-btn-sm btn-danger-outline" style="height: 32px;" title="Reset Digital Twin to Baseline State">
           RESET TWIN
         </button>
@@ -1525,6 +1528,132 @@
 
 
 
+  <!-- ================================================================
+       BATTLE MODE PANEL
+       ================================================================ -->
+  <div id="battleModePanel" style="display:none;position:fixed;top:62px;right:0;width:320px;height:calc(100vh - 62px);background:rgba(6,10,20,0.97);border-left:1px solid rgba(239,68,68,0.25);z-index:19000;display:none;flex-direction:column;gap:0;backdrop-filter:blur(12px);box-shadow:-4px 0 30px rgba(0,0,0,0.6);overflow:hidden;">
+
+    <!-- Header -->
+    <div style="padding:10px 14px 8px;background:linear-gradient(90deg,rgba(239,68,68,0.12),rgba(45,125,210,0.12));border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div>
+        <div style="font-size:0.62rem;font-weight:700;letter-spacing:0.12em;color:#ef4444;">⚔ BATTLE MODE</div>
+        <div style="font-size:0.55rem;color:var(--text-muted);margin-top:1px;" id="battleStatusLabel">AI vs AI Simulation</div>
+      </div>
+      <button onclick="window.appInstance?.closeBattlePanel()" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-muted);padding:3px 8px;font-size:0.65rem;cursor:pointer;">✕</button>
+    </div>
+
+    <!-- Timer + Scores -->
+    <div style="padding:10px 14px;background:rgba(0,0,0,0.3);border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="text-align:center;flex:1;">
+          <div style="font-size:0.55rem;font-weight:700;letter-spacing:0.1em;color:#ef4444;margin-bottom:2px;">RED TEAM</div>
+          <div id="battleRedScore" style="font-size:1.5rem;font-weight:700;font-family:var(--font-mono);color:#ef4444;line-height:1;">0</div>
+          <div id="battleRedPhase" style="font-size:0.52rem;color:rgba(239,68,68,0.6);margin-top:2px;">IDLE</div>
+        </div>
+        <div style="text-align:center;flex:0 0 auto;padding:0 10px;">
+          <div id="battleTimer" style="font-size:1.0rem;font-weight:700;font-family:var(--font-mono);color:var(--text-secondary);">00:00</div>
+          <div style="font-size:0.48rem;color:var(--text-muted);margin-top:1px;">ELAPSED</div>
+        </div>
+        <div style="text-align:center;flex:1;">
+          <div style="font-size:0.55rem;font-weight:700;letter-spacing:0.1em;color:#2d7dd2;margin-bottom:2px;">BLUE TEAM</div>
+          <div id="battleBlueScore" style="font-size:1.5rem;font-weight:700;font-family:var(--font-mono);color:#2d7dd2;line-height:1;">0</div>
+          <div id="battleBluePhase" style="font-size:0.52rem;color:rgba(45,125,210,0.6);margin-top:2px;">IDLE</div>
+        </div>
+      </div>
+      <!-- Node status bar -->
+      <div style="display:flex;gap:8px;font-size:0.55rem;color:var(--text-muted);">
+        <span>Compromised: <span id="battleCompromisedCount" style="color:#ef4444;font-weight:700;">0</span></span>
+        <span>Isolated: <span id="battleIsolatedCount" style="color:#fbbf24;font-weight:700;">0</span></span>
+        <span>Safe: <span id="battleSafeCount" style="color:#22c55e;font-weight:700;">0</span></span>
+      </div>
+    </div>
+
+    <!-- Win Banner (hidden until winner) -->
+    <div id="battleWinBanner" style="display:none;padding:10px 14px;text-align:center;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div id="battleWinText" style="font-size:1rem;font-weight:700;font-family:var(--font-mono);"></div>
+      <div id="battleWinSub" style="font-size:0.62rem;color:var(--text-muted);margin-top:3px;"></div>
+    </div>
+
+    <!-- Controls -->
+    <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;">
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button id="btnBattleStart" onclick="window.appInstance?.startAIBattle()" style="flex:1;padding:7px 4px;background:linear-gradient(135deg,rgba(239,68,68,0.18),rgba(45,125,210,0.18));border:1px solid rgba(239,68,68,0.4);border-radius:5px;color:#ef4444;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;">▶ START SIM</button>
+        <button id="btnBattlePause" onclick="window.appInstance?.pauseAIBattle()" style="flex:0 0 auto;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:var(--text-secondary);font-size:0.65rem;cursor:pointer;">⏸</button>
+        <button onclick="window.appInstance?.resetAIBattle()" style="flex:0 0 auto;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:var(--text-secondary);font-size:0.65rem;cursor:pointer;">↺</button>
+      </div>
+      <!-- Speed -->
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:0.58rem;color:var(--text-muted);white-space:nowrap;">SIM SPEED</span>
+        <div style="display:flex;gap:4px;flex:1;">
+          <button class="battle-speed-btn" data-speed="1"  onclick="window.appInstance?.setBattleSpeed(1)"  style="flex:1;padding:4px 2px;font-size:0.6rem;cursor:pointer;background:rgba(45,125,210,0.2);border:1px solid rgba(45,125,210,0.5);border-radius:3px;color:#60a5fa;font-weight:700;">1×</button>
+          <button class="battle-speed-btn" data-speed="3"  onclick="window.appInstance?.setBattleSpeed(3)"  style="flex:1;padding:4px 2px;font-size:0.6rem;cursor:pointer;background:rgba(45,125,210,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;color:var(--text-muted);">3×</button>
+          <button class="battle-speed-btn" data-speed="8"  onclick="window.appInstance?.setBattleSpeed(8)"  style="flex:1;padding:4px 2px;font-size:0.6rem;cursor:pointer;background:rgba(45,125,210,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;color:var(--text-muted);">8×</button>
+          <button class="battle-speed-btn" data-speed="20" onclick="window.appInstance?.setBattleSpeed(20)" style="flex:1;padding:4px 2px;font-size:0.6rem;cursor:pointer;background:rgba(45,125,210,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;color:var(--text-muted);">20×</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab switcher: AI Log | Multiplayer -->
+    <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;">
+      <button id="battleTabLog" onclick="window.appInstance?.switchBattleTab('log')" style="flex:1;padding:7px 4px;font-size:0.6rem;font-weight:700;letter-spacing:0.06em;background:rgba(239,68,68,0.06);border:none;border-bottom:2px solid #ef4444;color:#ef4444;cursor:pointer;">AI BATTLE LOG</button>
+      <button id="battleTabMp" onclick="window.appInstance?.switchBattleTab('mp')" style="flex:1;padding:7px 4px;font-size:0.6rem;font-weight:700;letter-spacing:0.06em;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-muted);cursor:pointer;">MULTIPLAYER</button>
+    </div>
+
+    <!-- AI Battle Log -->
+    <div id="battleLogPane" style="flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:3px;" class="battle-log-scroll">
+      <div style="font-size:0.58rem;color:var(--text-muted);text-align:center;padding:20px 0;" id="battleLogEmpty">Start simulation to see live AI actions</div>
+    </div>
+
+    <!-- Multiplayer Pane -->
+    <div id="battleMpPane" style="display:none;flex:1;overflow-y:auto;padding:12px 14px;">
+      <div style="font-size:0.62rem;color:var(--text-secondary);margin-bottom:10px;line-height:1.5;">
+        Share a Session ID with a partner. One tab hosts (Blue/Defender), the other joins (Red/Attacker). Zero server — runs entirely in your browser via BroadcastChannel.
+      </div>
+
+      <!-- Host -->
+      <div style="background:rgba(45,125,210,0.07);border:1px solid rgba(45,125,210,0.2);border-radius:6px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:0.6rem;font-weight:700;color:#2d7dd2;margin-bottom:8px;letter-spacing:0.08em;">🔵 HOST SESSION (Defender)</div>
+        <button onclick="window.appInstance?.mpHost()" style="width:100%;padding:7px;background:rgba(45,125,210,0.15);border:1px solid rgba(45,125,210,0.4);border-radius:4px;color:#60a5fa;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.04em;">CREATE SESSION</button>
+        <div id="mpSessionIdDisplay" style="display:none;margin-top:8px;text-align:center;">
+          <div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:3px;">SESSION ID — share this with your partner</div>
+          <div id="mpSessionIdText" style="font-size:1.4rem;font-weight:700;font-family:var(--font-mono);color:#00d4ff;letter-spacing:0.15em;cursor:pointer;" onclick="navigator.clipboard?.writeText(this.textContent)"></div>
+          <div style="font-size:0.5rem;color:var(--text-muted);margin-top:2px;">Click to copy</div>
+        </div>
+      </div>
+
+      <!-- Join -->
+      <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:0.6rem;font-weight:700;color:#ef4444;margin-bottom:8px;letter-spacing:0.08em;">🔴 JOIN SESSION (Attacker)</div>
+        <div style="display:flex;gap:6px;">
+          <input id="mpJoinInput" type="text" maxlength="6" placeholder="XXXXXX" style="flex:1;background:rgba(0,0,0,0.4);border:1px solid rgba(239,68,68,0.3);border-radius:4px;padding:6px 8px;color:#f1f5f9;font-family:var(--font-mono);font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;outline:none;">
+          <button onclick="window.appInstance?.mpJoin()" style="padding:6px 10px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:4px;color:#ef4444;font-size:0.65rem;font-weight:700;cursor:pointer;">JOIN</button>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div id="mpStatusBlock" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px;">
+        <div style="font-size:0.58rem;color:var(--text-muted);" id="mpStatusText">No active session</div>
+        <button id="mpDisconnectBtn" onclick="window.appInstance?.mpDisconnect()" style="display:none;margin-top:8px;width:100%;padding:5px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:4px;color:#ef4444;font-size:0.6rem;cursor:pointer;">DISCONNECT</button>
+      </div>
+
+      <!-- Multiplayer action log -->
+      <div style="margin-top:10px;">
+        <div style="font-size:0.58rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;margin-bottom:5px;">SESSION LOG</div>
+        <div id="mpActionLog" style="font-size:0.6rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:3px;max-height:140px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Human action buttons (manual moves for multiplayer) -->
+      <div style="margin-top:10px;">
+        <div style="font-size:0.58rem;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;margin-bottom:5px;">MANUAL ACTION — click node on canvas first</div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="window.appInstance?.mpAttackSelected()" style="flex:1;padding:6px 4px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:4px;color:#ef4444;font-size:0.62rem;font-weight:700;cursor:pointer;">⚡ ATTACK NODE</button>
+          <button onclick="window.appInstance?.mpDefendSelected()" style="flex:1;padding:6px 4px;background:rgba(45,125,210,0.12);border:1px solid rgba(45,125,210,0.35);border-radius:4px;color:#60a5fa;font-size:0.62rem;font-weight:700;cursor:pointer;">🛡 DEFEND NODE</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /battleModePanel -->
+
   <!-- Simulation scripts -->
   <script src="physics-sim.js"></script>
   <script src="network-canvas.js"></script>
@@ -1533,6 +1662,8 @@
   <script src="wireshark.js"></script>
   <script src="packet-tracer.js"></script>
   <script src="inspector.js"></script>
+  <script src="ai-agents.js"></script>
+  <script src="multiplayer.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

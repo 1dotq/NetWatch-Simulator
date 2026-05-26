@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260523b">
+  <link rel="stylesheet" href="styles.css?v=20260526N">
   <!-- Safety check for restricted WebViews (file:// scheme, private browsing) -->
   <script>
     (function() {
@@ -244,6 +244,21 @@
         </button>
         <button id="btnBattleMode" type="button" onclick="window.appInstance?.toggleBattlePanel()" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(239,68,68,0.5);color:#ef4444;background:rgba(239,68,68,0.07);" title="Open AI Red vs Blue Battle Mode">
           ⚔ BATTLE
+        </button>
+        <button id="btnEvolveMode" type="button" onclick="window.appInstance?.toggleEvolvePanel()" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(168,85,247,0.5);color:#a855f7;background:rgba(168,85,247,0.07);" title="Evolutionary Attack Discovery">
+          🧬 EVOLVE
+        </button>
+        <button id="btnAttackGraph" type="button" onclick="window.appInstance?.runAttackGraph()" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(251,191,36,0.4);color:#fbbf24;background:rgba(251,191,36,0.06);" title="Exhaustive Attack Graph BFS Analysis">
+          🗺 ATT GRAPH
+        </button>
+        <button id="btnIdleTraffic" type="button" onclick="window.appInstance?.toggleIdleTraffic()" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(56,189,248,0.4);color:#38bdf8;background:rgba(56,189,248,0.08);" title="Toggle live idle network traffic animation">
+          🌊 TRAFFIC
+        </button>
+        <button id="btnMitreToggle" type="button" onclick="window.appInstance?.toggleMitrePanel()" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(96,165,250,0.4);color:#60a5fa;background:rgba(96,165,250,0.06);" title="MITRE ATT&CK Live Heatmap">
+          🔬 ATT&amp;CK
+        </button>
+        <button type="button" onclick="window.appInstance?.exportScreenshot()" class="cyber-btn-sm" style="height:32px;display:inline-flex;align-items:center;gap:4px;border-color:rgba(34,197,94,0.4);color:#4ade80;background:rgba(34,197,94,0.06);" title="Export Canvas Screenshot">
+          📷
         </button>
         <button id="btnResetTwin" type="button" class="cyber-btn-sm btn-danger-outline" style="height: 32px;" title="Reset Digital Twin to Baseline State">
           RESET TWIN
@@ -1485,10 +1500,11 @@
         </div>
       </div>
       <!-- Node status bar -->
-      <div style="display:flex;gap:8px;font-size:0.55rem;color:var(--text-muted);">
+      <div style="display:flex;gap:8px;font-size:0.55rem;color:var(--text-muted);align-items:center;flex-wrap:wrap;">
         <span>Compromised: <span id="battleCompromisedCount" style="color:#ef4444;font-weight:700;">0</span></span>
         <span>Isolated: <span id="battleIsolatedCount" style="color:#fbbf24;font-weight:700;">0</span></span>
         <span>Safe: <span id="battleSafeCount" style="color:#22c55e;font-weight:700;">0</span></span>
+        <button onclick="window.appInstance?.toggleBlastRadius()" id="btnBlastRadius" style="margin-left:auto;padding:2px 7px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:3px;color:#f87171;font-size:0.52rem;cursor:pointer;" title="Show blast radius from selected node">💥 BLAST</button>
       </div>
     </div>
 
@@ -1496,6 +1512,8 @@
     <div id="battleWinBanner" style="display:none;padding:10px 14px;text-align:center;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div id="battleWinText" style="font-size:1rem;font-weight:700;font-family:var(--font-mono);"></div>
       <div id="battleWinSub" style="font-size:0.62rem;color:var(--text-muted);margin-top:3px;"></div>
+      <button id="btnGenerateReport" onclick="window.appInstance?.generateIncidentReport()" style="margin-top:8px;width:100%;padding:7px;background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(45,125,210,0.15));border:1px solid rgba(255,255,255,0.2);border-radius:5px;color:#e2e8f0;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.06em;">📋 GENERATE INCIDENT REPORT</button>
+      <button onclick="window.appInstance?.showBlueGapAnalysis()" style="margin-top:6px;width:100%;padding:7px;background:rgba(45,125,210,0.12);border:1px solid rgba(45,125,210,0.3);border-radius:5px;color:#60a5fa;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.06em;">🔵 BLUE TEAM GAP ANALYSIS</button>
     </div>
 
     <!-- Controls -->
@@ -1504,6 +1522,19 @@
         <button id="btnBattleStart" onclick="window.appInstance?.startAIBattle()" style="flex:1;padding:7px 4px;background:linear-gradient(135deg,rgba(239,68,68,0.18),rgba(45,125,210,0.18));border:1px solid rgba(239,68,68,0.4);border-radius:5px;color:#ef4444;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;">▶ START SIM</button>
         <button id="btnBattlePause" onclick="window.appInstance?.pauseAIBattle()" style="flex:0 0 auto;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:var(--text-secondary);font-size:0.65rem;cursor:pointer;">⏸</button>
         <button onclick="window.appInstance?.resetAIBattle()" style="flex:0 0 auto;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:var(--text-secondary);font-size:0.65rem;cursor:pointer;">↺</button>
+        <button onclick="window.appInstance?.toggleKillChainTrail()" id="btnKillChain" title="Show animated kill chain trail on canvas" style="flex:0 0 auto;padding:4px 7px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:4px;color:#f87171;font-size:0.6rem;cursor:pointer;">⛓ TRAIL</button>
+        <button onclick="window.appInstance?.toggleSegmentationGaps()" title="Find unprotected IT→OT paths" style="flex:0 0 auto;padding:4px 7px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:4px;color:#fbbf24;font-size:0.6rem;cursor:pointer;">🔌 GAPS</button>
+      </div>
+      <!-- Feature 13/15/14 toggles -->
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <button id="btnBattlePackets" onclick="window.appInstance?.toggleBattlePackets()" title="Animate red/blue battle packets on links" style="flex:1;padding:4px 6px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:4px;color:#f87171;font-size:0.6rem;cursor:pointer;">📦 PACKETS</button>
+        <button id="btnStealth" onclick="window.appInstance?.toggleStealthMeters()" title="Show per-node stealth meters" style="flex:1;padding:4px 6px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:4px;color:#4ade80;font-size:0.6rem;cursor:pointer;">👁 STEALTH</button>
+        <button id="btnTimeline" onclick="window.appInstance?.toggleTimeline()" title="Attack timeline Gantt chart" style="flex:1;padding:4px 6px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:4px;color:#c084fc;font-size:0.6rem;cursor:pointer;">📅 TIMELINE</button>
+      </div>
+      <!-- Feature 19: Time-of-Day Sim Hour -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span id="simHourLabel" style="font-size:0.58rem;color:var(--text-muted);white-space:nowrap;">🕐 Sim Hour: 09:00</span>
+        <input type="range" id="simHour" min="0" max="23" value="9" oninput="window.appInstance?.onSimHourChange()" style="flex:1;accent-color:#f59e0b;">
       </div>
       <!-- Speed -->
       <div style="display:flex;align-items:center;gap:8px;">
@@ -1578,16 +1609,196 @@
 
   </div><!-- /battleModePanel -->
 
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       INCIDENT REPORT MODAL
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="incidentReportModal" style="display:none;position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,0.82);backdrop-filter:blur(6px);overflow-y:auto;">
+    <div style="max-width:820px;margin:40px auto 60px;background:linear-gradient(160deg,#080d1c,#0d1428);border:1px solid rgba(239,68,68,0.3);border-radius:12px;box-shadow:0 0 60px rgba(239,68,68,0.12),0 0 120px rgba(0,0,0,0.8);overflow:hidden;">
+
+      <!-- Modal header -->
+      <div style="padding:16px 24px;background:linear-gradient(90deg,rgba(239,68,68,0.12),rgba(45,125,210,0.12));border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-family:'Orbitron',sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:0.14em;color:#ef4444;">📋 INCIDENT REPORT</div>
+          <div style="font-size:0.6rem;color:var(--text-muted);margin-top:2px;">AETHERIS NetPilot — Post-Battle Analysis</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="window.appInstance?.exportIncidentReport()" style="padding:6px 14px;background:rgba(45,125,210,0.15);border:1px solid rgba(45,125,210,0.4);border-radius:5px;color:#60a5fa;font-size:0.62rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;">⬇ EXPORT HTML</button>
+          <button onclick="document.getElementById('incidentReportModal').style.display='none'" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:var(--text-muted);font-size:0.65rem;cursor:pointer;">✕ CLOSE</button>
+        </div>
+      </div>
+
+      <!-- Report content -->
+      <div id="incidentReportBody" style="padding:28px 32px;font-size:0.75rem;line-height:1.7;color:#c8d4e8;">
+        <div id="incidentReportLoading" style="text-align:center;padding:60px 0;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:0.85rem;color:#ef4444;margin-bottom:12px;">GENERATING REPORT...</div>
+          <div style="font-size:0.65rem;color:var(--text-muted);">Analysing battle telemetry with AI</div>
+          <div style="margin-top:16px;display:flex;justify-content:center;gap:6px;" id="reportDots">
+            <span style="width:8px;height:8px;background:#ef4444;border-radius:50%;display:inline-block;animation:badge-pulse 1s ease-in-out infinite;"></span>
+            <span style="width:8px;height:8px;background:#ef4444;border-radius:50%;display:inline-block;animation:badge-pulse 1s ease-in-out 0.3s infinite;"></span>
+            <span style="width:8px;height:8px;background:#ef4444;border-radius:50%;display:inline-block;animation:badge-pulse 1s ease-in-out 0.6s infinite;"></span>
+          </div>
+        </div>
+        <div id="incidentReportContent" style="display:none;"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       EVOLUTIONARY ATTACK DISCOVERY PANEL
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="evolveModePanel" style="display:none;position:fixed;top:62px;right:0;width:360px;height:calc(100vh - 62px);background:rgba(6,8,18,0.97);border-left:1px solid rgba(168,85,247,0.3);z-index:19500;flex-direction:column;backdrop-filter:blur(14px);box-shadow:-4px 0 40px rgba(168,85,247,0.1);overflow:hidden;">
+
+    <!-- Header -->
+    <div style="padding:10px 14px 8px;background:linear-gradient(90deg,rgba(168,85,247,0.12),rgba(239,68,68,0.08));border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div>
+        <div style="font-family:'Orbitron',sans-serif;font-size:0.62rem;font-weight:700;letter-spacing:0.12em;color:#a855f7;">🧬 EVOLUTIONARY ATTACK DISCOVERY</div>
+        <div style="font-size:0.55rem;color:var(--text-muted);margin-top:2px;" id="evolveStatusLabel">Idle — configure and run</div>
+      </div>
+      <button onclick="window.appInstance?.closeEvolvePanel()" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-muted);padding:3px 8px;font-size:0.65rem;cursor:pointer;">✕</button>
+    </div>
+
+    <!-- Config + Controls -->
+    <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;font-size:0.6rem;color:var(--text-muted);">
+        <label>Generations
+          <input id="evolveGenInput" type="number" min="5" max="100" value="35" style="width:100%;margin-top:3px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:#e2e8f0;padding:4px 6px;font-size:0.65rem;">
+        </label>
+        <label>Population
+          <input id="evolvePopInput" type="number" min="10" max="100" value="50" style="width:100%;margin-top:3px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:#e2e8f0;padding:4px 6px;font-size:0.65rem;">
+        </label>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:4px;">SEED WITH APT PROFILE</div>
+        <select id="aptProfileSelect" style="width:100%;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:4px;color:#e2e8f0;padding:4px 6px;font-size:0.62rem;">
+          <option value="">— Random population —</option>
+          <option value="Sandworm">Sandworm (IEC-61850 grid attack)</option>
+          <option value="APT28 (Fancy Bear)">APT28 Fancy Bear (credential harvest)</option>
+          <option value="DarkSide (Colonial)">DarkSide / Colonial Pipeline</option>
+          <option value="TRITON/TRISIS">TRITON/TRISIS (SIS targeting)</option>
+          <option value="Volt Typhoon">Volt Typhoon (LOTL, patience)</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button id="btnEvolveStart" onclick="window.appInstance?.startEvolution()" style="flex:1;padding:7px;background:linear-gradient(135deg,rgba(168,85,247,0.2),rgba(239,68,68,0.15));border:1px solid rgba(168,85,247,0.5);border-radius:5px;color:#c084fc;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.06em;">▶ RUN EVOLUTION</button>
+        <button onclick="window.appInstance?.stopEvolution()" style="padding:7px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:var(--text-muted);font-size:0.65rem;cursor:pointer;">■ STOP</button>
+        <button onclick="window.appInstance?.deployChampion()" id="btnDeployChamp" disabled style="padding:7px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:5px;color:#4ade80;font-size:0.6rem;cursor:pointer;opacity:0.4;" title="Run champion genome as live battle">⚔</button>
+      </div>
+      <!-- Features 16/21/24 toolbar -->
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button id="btnDossier" onclick="window.appInstance?.toggleDossierPanel()" title="Threat actor dossier for selected APT" style="flex:1;padding:6px 4px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);border-radius:5px;color:#c084fc;font-size:0.6rem;font-weight:700;cursor:pointer;">🕵 DOSSIER</button>
+        <button id="btnCompare" onclick="window.appInstance?.openCompareModal()" title="Side-by-side battle comparison" style="flex:1;padding:6px 4px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:5px;color:#38bdf8;font-size:0.6rem;font-weight:700;cursor:pointer;">⚖ COMPARE</button>
+        <button id="btnTrainRL" onclick="window.appInstance?.trainRLAgent()" title="Train reinforcement-learning red agent" style="flex:1;padding:6px 4px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:5px;color:#f87171;font-size:0.6rem;font-weight:700;cursor:pointer;">🤖 TRAIN RL</button>
+      </div>
+    </div>
+
+    <!-- Progress bar + live stats -->
+    <div style="padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;">
+      <div style="display:flex;justify-content:space-between;font-size:0.55rem;color:var(--text-muted);margin-bottom:4px;">
+        <span>Generation <span id="evolveGenCounter" style="color:#c084fc;font-weight:700;">0</span> / <span id="evolveGenMax">35</span></span>
+        <span>Win rate <span id="evolveWinRate" style="color:#4ade80;font-weight:700;">—</span></span>
+        <span>Best fitness <span id="evolveBestFit" style="color:#fbbf24;font-weight:700;">—</span></span>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;">
+        <div id="evolveProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#a855f7,#c084fc);border-radius:3px;transition:width 0.3s;box-shadow:0 0 8px rgba(168,85,247,0.6);"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:6px;font-size:0.52rem;color:var(--text-muted);">
+        <span>Battles run: <span id="evolveBattleCount" style="color:#e2e8f0;font-weight:700;">0</span></span>
+        <span>Winning: <span id="evolveWinCount" style="color:#22c55e;font-weight:700;">0</span></span>
+        <span>Novel paths: <span id="evolvePathCount" style="color:#f59e0b;font-weight:700;">0</span></span>
+      </div>
+    </div>
+
+    <!-- Fitness chart canvas -->
+    <div style="padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;">
+      <div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:4px;letter-spacing:0.06em;">FITNESS EVOLUTION CURVE</div>
+      <canvas id="evolveChartCanvas" width="328" height="72" style="width:100%;border-radius:4px;background:rgba(0,0,0,0.3);"></canvas>
+    </div>
+
+    <!-- Results tabs -->
+    <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;padding:4px 8px 0;background:rgba(0,0,0,0.2);gap:2px;">
+      <button class="evo-tab-btn active" data-tab="chains"  onclick="window.appInstance?.switchEvoTab('chains')"  style="flex:1;padding:5px 4px;font-size:0.58rem;font-weight:700;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);border-bottom:none;border-radius:3px 3px 0 0;color:#c084fc;cursor:pointer;">⛓ CHAINS</button>
+      <button class="evo-tab-btn"        data-tab="heatmap" onclick="window.appInstance?.switchEvoTab('heatmap')" style="flex:1;padding:5px 4px;font-size:0.58rem;font-weight:700;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-bottom:none;border-radius:3px 3px 0 0;color:var(--text-muted);cursor:pointer;">🔥 HEAT MAP</button>
+      <button class="evo-tab-btn"        data-tab="champion" onclick="window.appInstance?.switchEvoTab('champion')" style="flex:1;padding:5px 4px;font-size:0.58rem;font-weight:700;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-bottom:none;border-radius:3px 3px 0 0;color:var(--text-muted);cursor:pointer;">🏆 CHAMPION</button>
+    </div>
+
+    <!-- Tab panes -->
+    <div id="evoTabContent" style="flex:1;overflow-y:auto;padding:8px 10px;" class="battle-log-scroll">
+
+      <!-- Chains tab -->
+      <div id="evoPane-chains">
+        <div style="font-size:0.55rem;color:var(--text-muted);padding:6px 0 8px;letter-spacing:0.06em;">Discovered multi-hop attack sequences ranked by frequency across all winning battles.</div>
+        <div id="evoChainsBody" style="display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:0.6rem;color:rgba(255,255,255,0.2);text-align:center;padding:20px 0;">Run evolution to discover attack chains</div>
+        </div>
+        <button onclick="window.appInstance?.generateSigmaRules()" style="width:100%;padding:6px;margin-top:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:#c084fc;font-size:0.62rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;">📄 EXPORT SIGMA RULES</button>
+      </div>
+
+      <!-- Heat map tab -->
+      <div id="evoPane-heatmap" style="display:none;">
+        <div style="font-size:0.55rem;color:var(--text-muted);padding:6px 0 8px;letter-spacing:0.06em;">Nodes and techniques targeted most across all winning strategies.</div>
+        <div id="evoHeatBody" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <div style="margin-top:10px;">
+          <button onclick="window.appInstance?.toggleHeatMapOverlay()" id="btnHeatOverlay" style="width:100%;padding:6px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:#c084fc;font-size:0.62rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;">👁 OVERLAY ON CANVAS</button>
+          <button onclick="window.appInstance?.toggleZeroDaySurface()" style="width:100%;padding:6px;margin-top:6px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:4px;color:#fbbf24;font-size:0.62rem;font-weight:700;cursor:pointer;letter-spacing:0.05em;">⚠ ZERO-DAY SURFACE MAP</button>
+        </div>
+      </div>
+
+      <!-- Champion tab -->
+      <div id="evoPane-champion" style="display:none;">
+        <div style="font-size:0.55rem;color:var(--text-muted);padding:6px 0 8px;letter-spacing:0.06em;">The fittest genome discovered — its strategy parameters and best attack path.</div>
+        <div id="evoChampBody"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       ATTACK TIMELINE GANTT PANEL (Feature 14)
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="attackTimeline" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:17500;background:rgba(6,8,20,0.96);border-top:1px solid rgba(168,85,247,0.3);backdrop-filter:blur(12px);max-height:200px;overflow:hidden;">
+    <div style="padding:6px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div style="font-family:'Orbitron',sans-serif;font-size:0.6rem;font-weight:700;color:#c084fc;letter-spacing:0.12em;">📅 ATTACK TIMELINE</div>
+      <button onclick="window.appInstance?.toggleTimeline()" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-muted);padding:2px 8px;font-size:0.6rem;cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:8px 14px;overflow-y:auto;max-height:155px;" id="timelineInner">
+      <div style="color:#475569;font-size:0.62rem;text-align:center;padding:10px;">Start a battle to see the timeline.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       THREAT ACTOR DOSSIER PANEL (Feature 16)
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="dossierPanel" style="display:none;position:fixed;top:62px;right:364px;width:300px;height:auto;max-height:calc(100vh - 80px);background:rgba(6,8,20,0.97);border:1px solid rgba(168,85,247,0.3);border-radius:8px;z-index:19400;flex-direction:column;backdrop-filter:blur(14px);box-shadow:-4px 0 30px rgba(168,85,247,0.1);overflow:hidden;">
+    <div style="padding:10px 14px 8px;background:linear-gradient(90deg,rgba(168,85,247,0.12),rgba(239,68,68,0.06));border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-family:'Orbitron',sans-serif;font-size:0.6rem;font-weight:700;color:#c084fc;letter-spacing:0.1em;">🕵 THREAT ACTOR DOSSIER</div>
+      <button onclick="document.getElementById('dossierPanel').style.display='none'" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-muted);padding:2px 7px;font-size:0.6rem;cursor:pointer;">✕</button>
+    </div>
+    <div id="dossierBody" style="padding:12px 14px;overflow-y:auto;max-height:calc(100vh - 140px);font-size:0.62rem;color:var(--text-secondary);line-height:1.55;">
+      <div style="color:#475569;text-align:center;padding:20px 0;">Select an APT profile in the Evolve panel.</div>
+    </div>
+  </div>
+
+  <!-- MITRE ATT&CK LIVE PANEL -->
+  <div id="mitrePanel" style="display:none;position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:18000;background:rgba(6,9,20,0.95);border:1px solid rgba(96,165,250,0.25);border-radius:8px;padding:10px 14px;backdrop-filter:blur(12px);box-shadow:0 8px 40px rgba(0,0,0,0.7);min-width:680px;max-width:95vw;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-family:'Orbitron',sans-serif;font-size:0.6rem;font-weight:700;letter-spacing:0.12em;color:#60a5fa;">MITRE ATT&amp;CK® LIVE</div>
+      <button onclick="document.getElementById('mitrePanel').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:0.7rem;cursor:pointer;">✕</button>
+    </div>
+    <div id="mitreGrid" style="display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;"></div>
+  </div>
+
   <!-- Simulation scripts -->
-  <script src="physics-sim.js"></script>
-  <script src="network-canvas.js"></script>
-  <script src="llm-service.js"></script>
-  <script src="orchestrator.js"></script>
-  <script src="wireshark.js"></script>
-  <script src="packet-tracer.js"></script>
-  <script src="inspector.js"></script>
-  <script src="ai-agents.js"></script>
-  <script src="multiplayer.js"></script>
-  <script src="app.js"></script>
+  <script src="physics-sim.js?v=20260526N"></script>
+  <script src="network-canvas.js?v=20260526N"></script>
+  <script src="llm-service.js?v=20260526N"></script>
+  <script src="orchestrator.js?v=20260526N"></script>
+  <script src="wireshark.js?v=20260526N"></script>
+  <script src="packet-tracer.js?v=20260526N"></script>
+  <script src="inspector.js?v=20260526N"></script>
+  <script src="ai-agents.js?v=20260526N"></script>
+  <script src="evolution-engine.js?v=20260526N"></script>
+  <script src="multiplayer.js?v=20260526N"></script>
+  <script src="app.js?v=20260526N"></script>
 </body>
 </html>

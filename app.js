@@ -59,8 +59,42 @@ class DigitalTwinApp {
     this.simGrid = new PowerGridSim();
 
     // AI Battle Mode
-    this.battle = new BattleSimulator(this);
+    this.battle    = new BattleSimulator(this);
+    this.evolution = null; // lazy-init when panel opens
     this.battle.onUpdate = () => this._updateBattleUI();
+
+    // Hook onAction callbacks for Features 13/15/18/20
+    const origRedAction  = this.battle.red.onAction?.bind(this.battle.red);
+    const origBlueAction = this.battle.blue.onAction?.bind(this.battle.blue);
+    this.battle.red.onAction = (tag, msg, nodeId) => {
+      origRedAction?.(tag, msg, nodeId);
+      if (!nodeId) return;
+      // Feature 13: battle packets
+      if (this.canvas?.battlePacketsVisible) {
+        const footholds = [...(this.battle.red.foothold || [])];
+        const srcId = footholds.length ? footholds[footholds.length - 1] : (this.canvas.nodes[0]?.id);
+        if (srcId && srcId !== nodeId) this.canvas.spawnBattlePacket(srcId, nodeId, '#ef4444');
+      }
+      // Feature 15: stealth
+      if (this.canvas?.stealthMetersVisible) this.canvas.updateStealthOnAttack(nodeId);
+      // Features 18/20: cascading failure + physics
+      const n = this.canvas?.nodes.find(x => x.id === nodeId);
+      if (n?.status === 'compromised') {
+        this._checkCascadingFailure(nodeId);
+        this._applyPhysicsImpact(nodeId);
+      }
+    };
+    this.battle.blue.onAction = (tag, msg, nodeId) => {
+      origBlueAction?.(tag, msg, nodeId);
+      if (!nodeId) return;
+      // Feature 13: blue defense packets
+      if (this.canvas?.battlePacketsVisible) {
+        const defended = this.canvas.nodes.filter(n => n.status === 'compromised')[0];
+        if (defended) this.canvas.spawnBattlePacket(nodeId, defended.id, '#2d7dd2');
+      }
+      // Feature 15: stealth recovery
+      if (this.canvas?.stealthMetersVisible) this.canvas.updateStealthOnDefend(nodeId);
+    };
     this.battlePanelOpen = false;
     this.battleCurrentTab = 'log';
 
@@ -136,6 +170,28 @@ class DigitalTwinApp {
           'Configure "router ospf 1" on both active gateways.',
           'Ping the master SCADA console (10.1.10.5) to confirm complete OSPF synchronization.'
         ],
+        topology: { nodes: [
+          { id: 'CE-01', name: 'CE-01 Gateway (OSPF)', ip: '10.1.10.1', type: 'it', role: 'Router', x: 180, y: 160, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'CE-02', name: 'CE-02 Gateway (OSPF)', ip: '10.1.10.2', type: 'it', role: 'Router', x: 380, y: 160, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'SCADA-MASTER', name: 'SCADA Master Console', ip: '10.1.10.5', type: 'ot', role: 'SCADA HMI', x: 540, y: 80, status: 'stable', firmware: 'Ignition 8.1', os: 'Ubuntu Core' },
+          { id: 'OT-SW', name: 'OT Modbus Bus Switch', ip: '192.168.10.1', type: 'ot', role: 'Switch', x: 560, y: 200, status: 'stable', firmware: 'Hirschmann RS30', os: 'Hirschmann OS' },
+          { id: 'PLC-INLET', name: 'Inlet Control PLC', ip: '192.168.10.101', type: 'plc', role: 'Modbus PLC', x: 700, y: 100, status: 'stable', firmware: 'Logix5580', os: 'VxWorks' },
+          { id: 'PLC-OUTLET', name: 'Outlet Control PLC', ip: '192.168.10.102', type: 'plc', role: 'Modbus PLC', x: 700, y: 240, status: 'stable', firmware: 'Logix5580', os: 'VxWorks' },
+          { id: 'TT-INLET', name: 'Inlet Temp Transmitter TT-01', ip: 'Slave 0x01', type: 'field', role: 'Sensor', x: 860, y: 80, status: 'stable', firmware: 'Modbus RTU', os: 'ASIC' },
+          { id: 'TT-OUTLET', name: 'Outlet Temp Transmitter TT-02', ip: 'Slave 0x02', type: 'field', role: 'Sensor', x: 860, y: 200, status: 'stable', firmware: 'Modbus RTU', os: 'ASIC' },
+          { id: 'PT-REACTOR', name: 'Reactor Pressure Sensor PT-01', ip: 'Slave 0x03', type: 'field', role: 'Sensor', x: 860, y: 320, status: 'stable', firmware: 'Modbus RTU', os: 'ASIC' },
+          { id: 'IT-MGMT', name: 'IT Management Station', ip: '10.1.10.20', type: 'it', role: 'Workstation', x: 80, y: 260, status: 'stable', firmware: 'Windows 11', os: 'Windows 11' }
+        ], links: [
+          { sourceId: 'IT-MGMT', targetId: 'CE-01', encrypted: false, status: 'normal' },
+          { sourceId: 'CE-01', targetId: 'CE-02', encrypted: false, status: 'normal' },
+          { sourceId: 'CE-02', targetId: 'SCADA-MASTER', encrypted: false, status: 'normal' },
+          { sourceId: 'CE-02', targetId: 'OT-SW', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-SW', targetId: 'PLC-INLET', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-SW', targetId: 'PLC-OUTLET', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-INLET', targetId: 'TT-INLET', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-OUTLET', targetId: 'TT-OUTLET', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-OUTLET', targetId: 'PT-REACTOR', encrypted: false, status: 'normal' }
+        ]},
         projectType: 'reactor',
         coDriverPayload: 'Aetheris Co-Driver, please help me with the "Reactor-3 Safety Loop Sync" challenge. Detail the exact Cisco IOS OSPF configuration commands and Modbus calibration parameters to stabilize the thermodynamic loop!'
       },
@@ -153,6 +209,36 @@ class DigitalTwinApp {
           'Identify Spanning-Tree (STP) root bridges.',
           'Confirm that local workstation hosts can resolve corporate AD-Server parameters.'
         ],
+        topology: { nodes: [
+          { id: 'INET-GW', name: 'Internet Edge Router', ip: '203.0.113.1', type: 'it', role: 'Router', x: 450, y: 60, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'CORE-FW', name: 'Perimeter Firewall', ip: '10.0.1.1', type: 'it', role: 'Firewall', x: 450, y: 150, status: 'stable', firmware: 'FortiOS 7.4', os: 'FortiOS' },
+          { id: 'CORE-SW-A', name: 'Core Switch A (Root Bridge)', ip: '10.0.10.1', type: 'it', role: 'Switch', x: 280, y: 240, status: 'stable', firmware: 'Catalyst 9500', os: 'Cisco IOS-XE' },
+          { id: 'CORE-SW-B', name: 'Core Switch B (Secondary)', ip: '10.0.10.2', type: 'it', role: 'Switch', x: 620, y: 240, status: 'stable', firmware: 'Catalyst 9500', os: 'Cisco IOS-XE' },
+          { id: 'AD-SRV', name: 'Active Directory / DNS Server', ip: '10.0.100.1', type: 'it', role: 'AD Server', x: 800, y: 150, status: 'stable', firmware: 'Windows Server 2022', os: 'Windows NT' },
+          { id: 'DIST-SW-1', name: 'Distribution Switch 1 (VLAN 10)', ip: '10.0.20.1', type: 'it', role: 'Switch', x: 130, y: 340, status: 'stable', firmware: 'Catalyst 9300', os: 'Cisco IOS-XE' },
+          { id: 'DIST-SW-2', name: 'Distribution Switch 2 (VLAN 20)', ip: '10.0.20.2', type: 'it', role: 'Switch', x: 450, y: 340, status: 'stable', firmware: 'Catalyst 9300', os: 'Cisco IOS-XE' },
+          { id: 'DIST-SW-3', name: 'Distribution Switch 3 (VLAN 30)', ip: '10.0.20.3', type: 'it', role: 'Switch', x: 770, y: 340, status: 'stable', firmware: 'Catalyst 9300', os: 'Cisco IOS-XE' },
+          { id: 'ACC-WS1', name: 'Access Workstation 1', ip: '10.0.30.10', type: 'it', role: 'Workstation', x: 80, y: 440, status: 'stable', firmware: 'Windows 11', os: 'Windows 11' },
+          { id: 'ACC-WS2', name: 'Access Workstation 2', ip: '10.0.30.11', type: 'it', role: 'Workstation', x: 230, y: 440, status: 'stable', firmware: 'Windows 11', os: 'Windows 11' },
+          { id: 'ACC-WS3', name: 'Access Workstation 3 (VoIP)', ip: '10.0.40.10', type: 'it', role: 'Workstation', x: 400, y: 440, status: 'stable', firmware: 'Ubuntu 22.04', os: 'Linux 5.15' },
+          { id: 'ACC-WS4', name: 'Access Workstation 4', ip: '10.0.50.10', type: 'it', role: 'Workstation', x: 720, y: 440, status: 'stable', firmware: 'Windows 11', os: 'Windows 11' },
+          { id: 'ACC-WS5', name: 'Access Workstation 5 (Guest)', ip: '10.0.50.11', type: 'it', role: 'Workstation', x: 870, y: 440, status: 'stable', firmware: 'Windows 11', os: 'Windows 11' }
+        ], links: [
+          { sourceId: 'INET-GW', targetId: 'CORE-FW', encrypted: false, status: 'normal' },
+          { sourceId: 'CORE-FW', targetId: 'CORE-SW-A', encrypted: true, status: 'normal' },
+          { sourceId: 'CORE-FW', targetId: 'CORE-SW-B', encrypted: true, status: 'normal' },
+          { sourceId: 'CORE-SW-A', targetId: 'CORE-SW-B', encrypted: false, status: 'normal' },
+          { sourceId: 'CORE-SW-B', targetId: 'AD-SRV', encrypted: false, status: 'normal' },
+          { sourceId: 'CORE-SW-A', targetId: 'DIST-SW-1', encrypted: false, status: 'normal' },
+          { sourceId: 'CORE-SW-A', targetId: 'DIST-SW-2', encrypted: false, status: 'normal' },
+          { sourceId: 'CORE-SW-B', targetId: 'DIST-SW-2', encrypted: false, status: 'normal' },
+          { sourceId: 'CORE-SW-B', targetId: 'DIST-SW-3', encrypted: false, status: 'normal' },
+          { sourceId: 'DIST-SW-1', targetId: 'ACC-WS1', encrypted: false, status: 'normal' },
+          { sourceId: 'DIST-SW-1', targetId: 'ACC-WS2', encrypted: false, status: 'normal' },
+          { sourceId: 'DIST-SW-2', targetId: 'ACC-WS3', encrypted: false, status: 'normal' },
+          { sourceId: 'DIST-SW-3', targetId: 'ACC-WS4', encrypted: false, status: 'normal' },
+          { sourceId: 'DIST-SW-3', targetId: 'ACC-WS5', encrypted: false, status: 'normal' }
+        ]},
         projectType: 'campus',
         coDriverPayload: 'Aetheris Co-Driver, please guide me through the "Enterprise Campus 3-Tier Core" lab. Provide the step-by-step commands to configure access-to-core inter-VLAN routing interfaces!'
       },
@@ -306,6 +392,30 @@ class DigitalTwinApp {
           'Assign route-target export and import constraints (100:1).',
           'Bind client interfaces and verify virtual routing isolation matrices.'
         ],
+        topology: { nodes: [
+          { id: 'MPLS-P', name: 'MPLS P-Core Transit Router', ip: '10.100.0.10', type: 'it', role: 'Router', x: 450, y: 100, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'PE-01', name: 'MPLS PE Router 1 (PE-01)', ip: '10.100.0.1', type: 'it', role: 'Router', x: 270, y: 200, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'PE-02', name: 'MPLS PE Router 2 (PE-02)', ip: '10.100.0.2', type: 'it', role: 'Router', x: 620, y: 200, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'CE-A-S1', name: 'CE Router Corp-A Site 1', ip: '10.1.0.1', type: 'it', role: 'Router', x: 110, y: 100, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'CE-A-S2', name: 'CE Router Corp-A Site 2', ip: '10.1.1.1', type: 'it', role: 'Router', x: 800, y: 100, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'CE-B-S1', name: 'CE Router Corp-B Site 1', ip: '10.2.0.1', type: 'it', role: 'Router', x: 110, y: 300, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'CE-B-S2', name: 'CE Router Corp-B Site 2', ip: '10.2.1.1', type: 'it', role: 'Router', x: 800, y: 300, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'HOST-A-S1', name: 'Corp-A Host Site 1', ip: '10.1.0.10', type: 'it', role: 'Workstation', x: 80, y: 60, status: 'stable', firmware: 'Windows 11', os: 'Windows 11' },
+          { id: 'HOST-A-S2', name: 'Corp-A Host Site 2', ip: '10.1.1.10', type: 'it', role: 'Workstation', x: 870, y: 60, status: 'stable', firmware: 'Windows 11', os: 'Windows 11' },
+          { id: 'HOST-B-S1', name: 'Corp-B Host Site 1', ip: '10.2.0.10', type: 'it', role: 'Workstation', x: 80, y: 360, status: 'stable', firmware: 'Ubuntu 22.04', os: 'Linux 5.15' },
+          { id: 'HOST-B-S2', name: 'Corp-B Host Site 2', ip: '10.2.1.10', type: 'it', role: 'Workstation', x: 870, y: 360, status: 'stable', firmware: 'Ubuntu 22.04', os: 'Linux 5.15' }
+        ], links: [
+          { sourceId: 'HOST-A-S1', targetId: 'CE-A-S1', encrypted: false, status: 'normal' },
+          { sourceId: 'CE-A-S1', targetId: 'PE-01', encrypted: false, status: 'normal' },
+          { sourceId: 'HOST-B-S1', targetId: 'CE-B-S1', encrypted: false, status: 'normal' },
+          { sourceId: 'CE-B-S1', targetId: 'PE-01', encrypted: false, status: 'normal' },
+          { sourceId: 'PE-01', targetId: 'MPLS-P', encrypted: false, status: 'normal' },
+          { sourceId: 'MPLS-P', targetId: 'PE-02', encrypted: false, status: 'normal' },
+          { sourceId: 'PE-02', targetId: 'CE-A-S2', encrypted: false, status: 'normal' },
+          { sourceId: 'CE-A-S2', targetId: 'HOST-A-S2', encrypted: false, status: 'normal' },
+          { sourceId: 'PE-02', targetId: 'CE-B-S2', encrypted: false, status: 'normal' },
+          { sourceId: 'CE-B-S2', targetId: 'HOST-B-S2', encrypted: false, status: 'normal' }
+        ]},
         projectType: 'campus',
         coDriverPayload: 'Aetheris Co-Driver, provide a complete walkthrough of BGP MPLS VPN isolation. Explain how to create VRFs, specify route-distinguishers, and bind interface families!'
       },
@@ -735,7 +845,31 @@ class DigitalTwinApp {
           'Run "show assets" in the Claroty sensor console to build baseline records.',
           'Verify S7, CIP, and Modbus hardware modules are accurately categorized.'
         ],
-        projectType: 'purdue',
+        topology: { nodes: [
+          { id: 'IT-FW-CL', name: 'IT/OT Zone Firewall', ip: '10.1.0.1', type: 'it', role: 'Firewall', x: 200, y: 220, status: 'stable', firmware: 'FortiOS 7.4', os: 'FortiOS' },
+          { id: 'CLAROTY-CTD', name: 'Claroty CT-100 DPI Sensor', ip: '192.168.1.50', type: 'ot', role: 'IDS Sensor', x: 420, y: 300, status: 'stable', firmware: 'Claroty CTD v4.2', os: 'Embedded Linux' },
+          { id: 'SPAN-SW', name: 'OT Core Switch (SPAN Port)', ip: '192.168.1.1', type: 'ot', role: 'Switch', x: 420, y: 180, status: 'stable', firmware: 'Hirschmann RS30', os: 'Hirschmann OS' },
+          { id: 'SCADA-HMI', name: 'SCADA HMI Console', ip: '192.168.1.10', type: 'ot', role: 'SCADA HMI', x: 420, y: 70, status: 'stable', firmware: 'Ignition 8.1', os: 'Ubuntu Core' },
+          { id: 'HIST-CL', name: 'OSIsoft PI Historian', ip: '192.168.1.200', type: 'ot', role: 'PI Historian', x: 240, y: 90, status: 'stable', firmware: 'OSIsoft PI 2023', os: 'Windows NT' },
+          { id: 'S7-PLC', name: 'Siemens S7-1515 (S7comm)', ip: '192.168.1.101', type: 'plc', role: 'Safety Controller', x: 620, y: 100, status: 'stable', firmware: 'Siemens S7-1500 FW 2.9', os: 'Embedded RTOS' },
+          { id: 'CIP-PLC', name: 'Rockwell CIP/EtherNet-IP PLC', ip: '192.168.1.102', type: 'plc', role: 'Modbus PLC', x: 620, y: 220, status: 'stable', firmware: 'Logix5580', os: 'VxWorks' },
+          { id: 'MODBUS-PLC', name: 'Schneider Modbus RTU Master', ip: '192.168.1.103', type: 'plc', role: 'Modbus PLC', x: 620, y: 340, status: 'stable', firmware: 'Schneider M221', os: 'EcoStruxure RTOS' },
+          { id: 'S7-FIELD', name: 'Profibus Field Device', ip: 'Slave 0x01', type: 'field', role: 'Sensor', x: 800, y: 100, status: 'stable', firmware: 'Modbus RTU', os: 'ASIC' },
+          { id: 'CIP-FIELD', name: 'EtherNet/IP Field Actuator', ip: 'Slave 0x02', type: 'field', role: 'Actuator', x: 800, y: 220, status: 'stable', firmware: 'EtherNet/IP RTU', os: 'ASIC' },
+          { id: 'MB-FIELD', name: 'Modbus RTU Field Sensor', ip: 'Slave 0x03', type: 'field', role: 'Sensor', x: 800, y: 340, status: 'stable', firmware: 'Modbus RTU', os: 'ASIC' }
+        ], links: [
+          { sourceId: 'IT-FW-CL', targetId: 'HIST-CL', encrypted: false, status: 'normal' },
+          { sourceId: 'IT-FW-CL', targetId: 'SPAN-SW', encrypted: true, status: 'normal' },
+          { sourceId: 'SPAN-SW', targetId: 'SCADA-HMI', encrypted: false, status: 'normal' },
+          { sourceId: 'SPAN-SW', targetId: 'S7-PLC', encrypted: false, status: 'normal' },
+          { sourceId: 'SPAN-SW', targetId: 'CIP-PLC', encrypted: false, status: 'normal' },
+          { sourceId: 'SPAN-SW', targetId: 'MODBUS-PLC', encrypted: false, status: 'normal' },
+          { sourceId: 'SPAN-SW', targetId: 'CLAROTY-CTD', encrypted: false, status: 'normal' },
+          { sourceId: 'S7-PLC', targetId: 'S7-FIELD', encrypted: false, status: 'normal' },
+          { sourceId: 'CIP-PLC', targetId: 'CIP-FIELD', encrypted: false, status: 'normal' },
+          { sourceId: 'MODBUS-PLC', targetId: 'MB-FIELD', encrypted: false, status: 'normal' }
+        ]},
+        projectType: 'reactor',
         coDriverPayload: 'Aetheris Co-Driver, show me how to baseline OT protocols using deep packet analysis and passive span monitors!'
       },
       {
@@ -1272,6 +1406,156 @@ class DigitalTwinApp {
           { from: 'FW-GRID',  to: 'CORP-JUMP', protocol: 'HTTPS',     speed: '1G'   },
         ]},
         coDriverPayload: 'Aetheris Co-Driver, explain False Data Injection (FDI) attacks against power grid EMS/SCADA. How do attackers bypass state estimation, what NERC CIP controls detect FDI, and what are the MITRE ATT&CK for ICS techniques?'
+      },
+      {
+        id: 'mega-ics-enterprise',
+        icon: '🏭',
+        title: 'Mega ICS/IT Enterprise — Full Purdue 46-Node Complex',
+        difficulty: 'Expert',
+        category: 'ics',
+        categoryLabel: 'ENTERPRISE ICS',
+        desc: 'A full 46-node enterprise + ICS topology spanning all Purdue Model levels (0–3), corporate IT, OT-DMZ, WAN remote site, and safety systems. Real-world complexity for advanced threat hunting, segmentation audits, and attack path analysis.',
+        objective: 'Navigate and audit a multi-zone ICS/IT enterprise. A compromised corporate workstation (CORP-WS1) has a potential lateral movement path toward SCADA and safety systems spanning five security zones. Enumerate every segmentation control and map the full attack surface from internet to Level-0 field devices.',
+        tasks: [
+          'Audit all five firewall boundaries in sequence: CORP-FW → OT-DMZ-FW → OT-L3-FW → OT-L2-SW → OT-L1-SW. Confirm correct zone assignment for each.',
+          'Trace the lateral movement path from CORP-WS1 (10.10.2.10, compromised) through OT-DMZ to SCADA-SRV1 (192.168.2.10). Count the hops and identify each firewall that must be bypassed.',
+          'List all Level-0 field devices (FT-001 through ANAL-001) and verify each communicates with its Level-1 PLC without encryption — document the unencrypted Modbus/Profibus links.',
+          'Locate the DATA-DIODE (Owl Cyber Defense) and verify it only forwards outbound telemetry from OT-L3 to HIST-SRV. Confirm no return path exists.',
+          'Assess the Remote WAN site attack path: REMOTE-PLC → REMOTE-RTU → REMOTE-FW → INET-RTR → CORP-FW. Determine the minimum number of hops to reach SIS-CTRL (Triconex TMR) and identify which zones are traversed.'
+        ],
+        topology: { nodes: [
+          /* ── Internet / WAN Edge ── */
+          { id: 'INET-RTR', name: 'Internet Edge Router', ip: '203.0.113.1', type: 'it', role: 'Router', x: 580, y: 60, status: 'stable', firmware: 'Cisco ASR 1002-X', os: 'Cisco IOS-XE' },
+
+          /* ── Corporate IT ── */
+          { id: 'CORP-FW', name: 'Corporate Perimeter NGFW (Palo Alto)', ip: '10.0.1.1', type: 'it', role: 'Firewall', x: 360, y: 140, status: 'stable', firmware: 'PAN-OS 11.0', os: 'Palo Alto' },
+          { id: 'DMZ-FW', name: 'DMZ Application Firewall', ip: '10.0.2.1', type: 'it', role: 'Firewall', x: 760, y: 140, status: 'stable', firmware: 'FortiOS 7.4', os: 'FortiOS' },
+          { id: 'IT-CORE-SW', name: 'IT Core Catalyst 9500', ip: '10.10.0.2', type: 'it', role: 'Switch', x: 360, y: 220, status: 'stable', firmware: 'Catalyst 9500', os: 'Cisco IOS-XE' },
+          { id: 'CORE-RTR', name: 'Core Distribution Router', ip: '10.10.0.1', type: 'it', role: 'Router', x: 200, y: 220, status: 'stable', firmware: 'Cisco IOSv 15.9', os: 'Cisco IOS' },
+          { id: 'AD-PDC', name: 'AD Primary Domain Controller', ip: '10.10.1.1', type: 'it', role: 'AD Server', x: 520, y: 220, status: 'stable', firmware: 'Windows Server 2022', os: 'Windows NT' },
+          { id: 'AD-BDC', name: 'AD Backup Domain Controller', ip: '10.10.1.2', type: 'it', role: 'AD Server', x: 670, y: 220, status: 'stable', firmware: 'Windows Server 2022', os: 'Windows NT' },
+          { id: 'SIEM-SRV', name: 'Splunk SIEM Platform', ip: '10.10.1.20', type: 'it', role: 'Server', x: 300, y: 300, status: 'stable', firmware: 'Splunk Enterprise 9.2', os: 'Ubuntu Server 22' },
+          { id: 'JUMP-SRV', name: 'Privileged Access Jump Server (PAM)', ip: '10.10.1.50', type: 'it', role: 'Server', x: 130, y: 300, status: 'stable', firmware: 'CyberArk PSM 14', os: 'Windows Server 2022' },
+          { id: 'MAIL-SRV', name: 'Exchange Email Server', ip: '10.10.1.10', type: 'it', role: 'Server', x: 520, y: 300, status: 'stable', firmware: 'Exchange 2019 CU14', os: 'Windows NT' },
+          { id: 'CORP-WS1', name: 'Compromised Corporate Workstation', ip: '10.10.2.10', type: 'it', role: 'Workstation', x: 680, y: 300, status: 'compromised', firmware: 'Windows 11 22H2', os: 'Windows 11' },
+          { id: 'CORP-WS2', name: 'Corporate Workstation 2', ip: '10.10.2.11', type: 'it', role: 'Workstation', x: 840, y: 220, status: 'stable', firmware: 'Windows 11 22H2', os: 'Windows 11' },
+
+          /* ── OT DMZ (Purdue Level 3.5) ── */
+          { id: 'OT-DMZ-FW', name: 'OT-DMZ Segmentation Firewall', ip: '172.16.1.1', type: 'it', role: 'Firewall', x: 260, y: 390, status: 'stable', firmware: 'FortiGate 200F', os: 'FortiOS' },
+          { id: 'OT-SIEM', name: 'Claroty Continuous Threat Detection', ip: '172.16.2.50', type: 'ot', role: 'IDS Sensor', x: 130, y: 390, status: 'stable', firmware: 'Claroty CTD v4.2', os: 'Embedded Linux' },
+          { id: 'HIST-ENT', name: 'OSIsoft PI Historian (Enterprise)', ip: '172.16.2.10', type: 'ot', role: 'PI Historian', x: 420, y: 390, status: 'stable', firmware: 'OSIsoft PI 2023', os: 'Windows NT' },
+          { id: 'MES-SRV', name: 'MES / SAP ME Integration Server', ip: '172.16.2.20', type: 'ot', role: 'Server', x: 570, y: 390, status: 'stable', firmware: 'SAP ME 15.4', os: 'Windows NT' },
+          { id: 'PATCH-SRV', name: 'WSUS OT Patch Management', ip: '172.16.2.30', type: 'it', role: 'Server', x: 720, y: 390, status: 'stable', firmware: 'WSUS 10', os: 'Windows Server 2022' },
+
+          /* ── OT Level 3 — Site Operations ── */
+          { id: 'OT-L3-FW', name: 'OT Level 3 Zone Firewall', ip: '192.168.1.1', type: 'ot', role: 'Firewall', x: 260, y: 480, status: 'stable', firmware: 'FortiGate 80F', os: 'FortiOS' },
+          { id: 'DATA-DIODE', name: 'Owl Cyber Defense Data Diode', ip: '192.168.1.100', type: 'it', role: 'Data Diode', x: 430, y: 480, status: 'stable', firmware: 'Owl OPDS v8.1', os: 'Owl OS' },
+          { id: 'OT-CORE-SW', name: 'OT Operations Core Switch', ip: '192.168.1.2', type: 'ot', role: 'Switch', x: 600, y: 480, status: 'stable', firmware: 'Hirschmann RS40', os: 'Hirschmann OS' },
+          { id: 'SCADA-SRV1', name: 'Ignition SCADA Primary Server', ip: '192.168.2.10', type: 'ot', role: 'SCADA HMI', x: 480, y: 560, status: 'stable', firmware: 'Ignition 8.1', os: 'Ubuntu Core' },
+          { id: 'SCADA-SRV2', name: 'Ignition SCADA Redundant Server', ip: '192.168.2.11', type: 'ot', role: 'SCADA HMI', x: 640, y: 560, status: 'stable', firmware: 'Ignition 8.1', os: 'Ubuntu Core' },
+          { id: 'EWS-1', name: 'Engineering Workstation — Unit 1', ip: '192.168.2.20', type: 'ot', role: 'Engineer Station', x: 340, y: 560, status: 'stable', firmware: 'Windows LTSC 2021', os: 'Windows LTSC 2021' },
+          { id: 'EWS-2', name: 'Engineering Workstation — Unit 2/3', ip: '192.168.2.21', type: 'ot', role: 'Engineer Station', x: 180, y: 560, status: 'stable', firmware: 'Windows LTSC 2021', os: 'Windows LTSC 2021' },
+          { id: 'OPS-HMI', name: 'Operator Control Room HMI', ip: '192.168.2.30', type: 'ot', role: 'SCADA HMI', x: 800, y: 560, status: 'stable', firmware: 'Ignition 8.1', os: 'Ubuntu Core' },
+          { id: 'OPC-SRV', name: 'Kepware OPC-UA Gateway', ip: '192.168.2.40', type: 'ot', role: 'Server', x: 960, y: 480, status: 'stable', firmware: 'KEPServerEX 6.16', os: 'Windows NT' },
+
+          /* ── OT Level 2 — Supervisory Control ── */
+          { id: 'OT-L2-SW', name: 'Level 2 Supervisory Switch', ip: '192.168.10.1', type: 'ot', role: 'Switch', x: 500, y: 650, status: 'stable', firmware: 'Hirschmann RS30', os: 'Hirschmann OS' },
+          { id: 'DCS-CTRL', name: 'Emerson DeltaV DCS Controller', ip: '192.168.10.10', type: 'plc', role: 'DCS Controller', x: 660, y: 650, status: 'stable', firmware: 'Emerson DeltaV v14.3', os: 'Emerson DeltaV RTOS' },
+          { id: 'SIS-CTRL', name: 'Triconex TMR SIS (Safety System)', ip: '192.168.10.20', type: 'plc', role: 'Safety Controller', x: 820, y: 650, status: 'stable', firmware: 'Triconex v10.4', os: 'Triconex OS' },
+          { id: 'SIS-HMI', name: 'Safety Instrumented System HMI', ip: '192.168.10.30', type: 'ot', role: 'SCADA HMI', x: 980, y: 650, status: 'stable', firmware: 'Ignition 8.1', os: 'Windows LTSC 2021' },
+
+          /* ── OT Level 1 — Process Control ── */
+          { id: 'OT-L1-SW', name: 'Level 1 Process Bus Switch', ip: '192.168.20.1', type: 'ot', role: 'Switch', x: 500, y: 750, status: 'stable', firmware: 'Hirschmann RS30', os: 'Hirschmann OS' },
+          { id: 'PROFIBUS-GW', name: 'Siemens CM 1542 Profibus Gateway', ip: '192.168.20.10', type: 'ot', role: 'Router', x: 700, y: 750, status: 'stable', firmware: 'Siemens CM 1542-SP', os: 'Embedded RTOS' },
+          { id: 'PLC-UNIT1', name: 'AB ControlLogix L5580 — Unit 1', ip: '192.168.20.101', type: 'plc', role: 'Modbus PLC', x: 580, y: 830, status: 'stable', firmware: 'Logix5580 v32.011', os: 'VxWorks' },
+          { id: 'PLC-UNIT2', name: 'AB ControlLogix L5580 — Unit 2', ip: '192.168.20.102', type: 'plc', role: 'Modbus PLC', x: 740, y: 830, status: 'stable', firmware: 'Logix5580 v32.011', os: 'VxWorks' },
+          { id: 'PLC-UNIT3', name: 'Siemens S7-1515 — Unit 3', ip: '192.168.20.103', type: 'plc', role: 'Safety Controller', x: 900, y: 830, status: 'stable', firmware: 'Siemens S7-1500 FW 2.9', os: 'Embedded RTOS' },
+          { id: 'RTU-WAN', name: 'Remote Terminal Unit (WAN-B site)', ip: '192.168.20.200', type: 'plc', role: 'Modbus PLC', x: 340, y: 750, status: 'stable', firmware: 'SEL-3530 RTAC', os: 'Embedded Linux' },
+
+          /* ── OT Level 0 — Field Instruments ── */
+          { id: 'FT-001', name: 'Flow Transmitter FT-001 (Inlet)', ip: 'Slave 0x01', type: 'field', role: 'Sensor', x: 520, y: 920, status: 'stable', firmware: 'Endress+Hauser Proline', os: 'ASIC' },
+          { id: 'PT-001', name: 'Pressure Transmitter PT-001', ip: 'Slave 0x02', type: 'field', role: 'Sensor', x: 630, y: 920, status: 'stable', firmware: 'Rosemount 3051S', os: 'ASIC' },
+          { id: 'PT-002', name: 'Pressure Transmitter PT-002 (HP)', ip: 'Slave 0x03', type: 'field', role: 'Sensor', x: 740, y: 920, status: 'stable', firmware: 'Rosemount 3051S', os: 'ASIC' },
+          { id: 'TT-001', name: 'Temperature Transmitter TT-001', ip: 'Slave 0x04', type: 'field', role: 'Sensor', x: 850, y: 920, status: 'stable', firmware: 'Endress+Hauser iTEMP', os: 'ASIC' },
+          { id: 'XV-001', name: 'Feed Valve Actuator XV-001', ip: 'Slave 0x05', type: 'field', role: 'Actuator', x: 980, y: 830, status: 'stable', firmware: 'Fisher DVC6200', os: 'Modbus RTU' },
+          { id: 'XV-002', name: 'Safety Relief Valve XV-002 (SIS)', ip: 'Slave 0x06', type: 'field', role: 'Actuator', x: 1100, y: 830, status: 'stable', firmware: 'Fisher DVC6200', os: 'Modbus RTU' },
+          { id: 'VFD-001', name: 'ABB ACS880 VFD Pump Motor A', ip: 'Slave 0x07', type: 'field', role: 'Actuator', x: 960, y: 920, status: 'stable', firmware: 'ABB ACS880 FW 2.9', os: 'ASIC' },
+          { id: 'ANAL-001', name: 'H2 Gas Leak Analyzer (Area C)', ip: 'Slave 0x08', type: 'field', role: 'Sensor', x: 1070, y: 920, status: 'stable', firmware: 'MSA Chillgard 5000', os: 'ASIC' },
+
+          /* ── Remote WAN Site ── */
+          { id: 'REMOTE-FW', name: 'Remote Site VPN Firewall', ip: '10.99.1.1', type: 'it', role: 'Firewall', x: 100, y: 480, status: 'stable', firmware: 'PAN-OS 11.0', os: 'Palo Alto' },
+          { id: 'REMOTE-RTU', name: 'Remote Site RTU Gateway', ip: '10.99.1.10', type: 'ot', role: 'Router', x: 100, y: 580, status: 'stable', firmware: 'SEL-3505 RTAC', os: 'Embedded Linux' },
+          { id: 'REMOTE-PLC', name: 'Remote Field PLC (Site B)', ip: '10.99.1.101', type: 'plc', role: 'Modbus PLC', x: 100, y: 660, status: 'stable', firmware: 'Logix5380', os: 'VxWorks' }
+        ], links: [
+          /* Internet → Corporate */
+          { sourceId: 'INET-RTR', targetId: 'CORP-FW', encrypted: false, status: 'normal' },
+          { sourceId: 'INET-RTR', targetId: 'DMZ-FW', encrypted: false, status: 'normal' },
+          /* Remote WAN VPN */
+          { sourceId: 'INET-RTR', targetId: 'REMOTE-FW', encrypted: true, status: 'normal' },
+
+          /* Corporate IT fabric */
+          { sourceId: 'CORP-FW', targetId: 'CORE-RTR', encrypted: true, status: 'normal' },
+          { sourceId: 'CORP-FW', targetId: 'IT-CORE-SW', encrypted: true, status: 'normal' },
+          { sourceId: 'CORE-RTR', targetId: 'JUMP-SRV', encrypted: true, status: 'normal' },
+          { sourceId: 'IT-CORE-SW', targetId: 'SIEM-SRV', encrypted: false, status: 'normal' },
+          { sourceId: 'IT-CORE-SW', targetId: 'AD-PDC', encrypted: false, status: 'normal' },
+          { sourceId: 'IT-CORE-SW', targetId: 'AD-BDC', encrypted: false, status: 'normal' },
+          { sourceId: 'IT-CORE-SW', targetId: 'MAIL-SRV', encrypted: false, status: 'normal' },
+          { sourceId: 'IT-CORE-SW', targetId: 'CORP-WS1', encrypted: false, status: 'normal' },
+          { sourceId: 'AD-BDC', targetId: 'CORP-WS2', encrypted: false, status: 'normal' },
+          { sourceId: 'AD-PDC', targetId: 'AD-BDC', encrypted: true, status: 'normal' },
+
+          /* Corporate → OT-DMZ */
+          { sourceId: 'CORP-FW', targetId: 'OT-DMZ-FW', encrypted: true, status: 'normal' },
+          { sourceId: 'OT-DMZ-FW', targetId: 'OT-SIEM', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-DMZ-FW', targetId: 'HIST-ENT', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-DMZ-FW', targetId: 'MES-SRV', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-DMZ-FW', targetId: 'PATCH-SRV', encrypted: false, status: 'normal' },
+
+          /* OT-DMZ → L3 */
+          { sourceId: 'OT-DMZ-FW', targetId: 'OT-L3-FW', encrypted: true, status: 'normal' },
+          { sourceId: 'OT-L3-FW', targetId: 'DATA-DIODE', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L3-FW', targetId: 'OT-CORE-SW', encrypted: false, status: 'normal' },
+          { sourceId: 'DATA-DIODE', targetId: 'HIST-ENT', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-CORE-SW', targetId: 'SCADA-SRV1', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-CORE-SW', targetId: 'SCADA-SRV2', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-CORE-SW', targetId: 'EWS-1', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-CORE-SW', targetId: 'EWS-2', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-CORE-SW', targetId: 'OPS-HMI', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-CORE-SW', targetId: 'OPC-SRV', encrypted: false, status: 'normal' },
+          { sourceId: 'SCADA-SRV1', targetId: 'SCADA-SRV2', encrypted: true, status: 'normal' },
+
+          /* L3 → L2 */
+          { sourceId: 'OT-CORE-SW', targetId: 'OT-L2-SW', encrypted: false, status: 'normal' },
+          { sourceId: 'OPC-SRV', targetId: 'DCS-CTRL', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L2-SW', targetId: 'DCS-CTRL', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L2-SW', targetId: 'SIS-CTRL', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L2-SW', targetId: 'SIS-HMI', encrypted: false, status: 'normal' },
+
+          /* L2 → L1 */
+          { sourceId: 'OT-L2-SW', targetId: 'OT-L1-SW', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L1-SW', targetId: 'PROFIBUS-GW', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L1-SW', targetId: 'PLC-UNIT1', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L1-SW', targetId: 'PLC-UNIT2', encrypted: false, status: 'normal' },
+          { sourceId: 'PROFIBUS-GW', targetId: 'PLC-UNIT3', encrypted: false, status: 'normal' },
+          { sourceId: 'OT-L1-SW', targetId: 'RTU-WAN', encrypted: false, status: 'normal' },
+
+          /* L1 → L0 Field */
+          { sourceId: 'PLC-UNIT1', targetId: 'FT-001', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-UNIT1', targetId: 'PT-001', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-UNIT2', targetId: 'PT-002', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-UNIT2', targetId: 'TT-001', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-UNIT3', targetId: 'XV-001', encrypted: false, status: 'normal' },
+          { sourceId: 'SIS-CTRL', targetId: 'XV-002', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-UNIT3', targetId: 'VFD-001', encrypted: false, status: 'normal' },
+          { sourceId: 'PLC-UNIT1', targetId: 'ANAL-001', encrypted: false, status: 'normal' },
+
+          /* Remote WAN site */
+          { sourceId: 'REMOTE-FW', targetId: 'REMOTE-RTU', encrypted: false, status: 'normal' },
+          { sourceId: 'REMOTE-RTU', targetId: 'REMOTE-PLC', encrypted: false, status: 'normal' }
+        ]},
+        projectType: 'reactor',
+        coDriverPayload: 'Aetheris Co-Driver, I am exploring the 46-node ICS/IT Mega Enterprise topology. Please walk me through the full Purdue Model segmentation from the internet edge to Level-0 field instruments. Identify the highest-risk lateral movement paths, explain each security zone boundary, and list the MITRE ATT&CK for ICS techniques an adversary would use to traverse from a compromised corporate workstation all the way to the Triconex Safety Instrumented System!'
       }
     ];
 
@@ -4732,9 +5016,11 @@ class DigitalTwinApp {
           this.tickChallenge(dt);
         }
 
-        // AI Battle simulation tick
-        if (this.battle && this.battle.active) {
+        // AI Battle simulation tick — skip if we're the multiplayer joiner (host drives the sim)
+        const _mpIsJoiner = this.mpSession && this.mpSession.role === 'red' && this.mpSession.peerConnected;
+        if (this.battle && this.battle.active && !_mpIsJoiner) {
           this.battle.tick();
+          if (this.canvas?.killChainVisible) this.canvas.updateKillChainFromBattle(this.battle);
         }
 
         // Periodically trigger OSPF dynamic routing synchronization (Upgrade 1)
@@ -4756,7 +5042,8 @@ class DigitalTwinApp {
       } else {
         // When simulation is paused or on landing page, only redraw if there is active interaction
         // or moving particles to completely reduce idle CPU usage to 0%.
-        const hasActiveVisuals = (this.canvas.particles.length > 0) || this.canvas.isPanning || this.canvas.draggedNode;
+        const hasActiveVisuals = (this.canvas.particles.length > 0) || this.canvas.isPanning || this.canvas.draggedNode
+          || this.canvas.idleTrafficVisible || this.canvas.battlePacketsVisible || this.canvas.stealthMetersVisible;
         if (hasActiveVisuals) {
           this.canvas.update(this.speedDilation);
           this.canvas.draw();
@@ -8145,6 +8432,7 @@ class DigitalTwinApp {
     this.initGridUI();
     this.initFacilityMap();
     this.initBattleUI();
+    this._initFeatures13to24();
     this.orchestrator.logSystem('50-improvement bundle + Tasks 11/16/17/19 + Power Grid twin + Battle Mode loaded.', 'success');
     // Pre-populate link speed/protocol for the default reactor topology
     setTimeout(() => {
@@ -8152,6 +8440,30 @@ class DigitalTwinApp {
       this.updateLinkUtilisation();
       this.canvas.draw();
     }, 500);
+  }
+
+  _initFeatures13to24() {
+    // Feature 16: wire APT dropdown to auto-refresh dossier
+    const aptSel = document.getElementById('aptProfileSelect');
+    if (aptSel) {
+      aptSel.addEventListener('change', () => {
+        if (document.getElementById('dossierPanel')?.style.display !== 'none') this._updateDossierPanel();
+      });
+    }
+    // Feature 19: init sim hour label
+    this.onSimHourChange();
+    // Feature 22: idle traffic starts ON, sync button state
+    if (this.canvas) this.canvas.idleTrafficVisible = true;
+    const btnIT = document.getElementById('btnIdleTraffic');
+    if (btnIT) btnIT.style.background = 'rgba(56,189,248,0.2)';
+    // Feature 24: add RL progress label next to train button
+    const btnRL = document.getElementById('btnTrainRL');
+    if (btnRL && !document.getElementById('rlProgress')) {
+      const sp = document.createElement('span');
+      sp.id = 'rlProgress';
+      sp.style.cssText = 'font-size:0.52rem;color:#94a3b8;margin-left:4px;font-family:var(--font-mono);';
+      btnRL.parentElement?.appendChild(sp);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -8304,6 +8616,16 @@ class DigitalTwinApp {
 
     // Battle log feed
     this._renderBattleLog();
+
+    // Fire MITRE heatmap for new events
+    if (this.battle?.combinedLog) {
+      const log = this.battle.combinedLog;
+      const lastSeen = this._mitreLastSeen || 0;
+      for (const entry of log) {
+        if (entry.ts > lastSeen) this._fireMitreTechnique(entry.msg || '');
+      }
+      if (log.length) this._mitreLastSeen = log[0].ts;
+    }
   }
 
   _renderBattleLog() {
@@ -8378,9 +8700,19 @@ class DigitalTwinApp {
     };
   }
 
-  mpHost() {
+  async mpHost() {
+    if (location.origin === 'null' || location.protocol === 'file:') {
+      this._mpLog('ERROR: Open the app via http://localhost:8080 — not as a local file');
+      return;
+    }
     if (this.mpSession.sessionId) this.mpSession.disconnect();
-    const id = this.mpSession.createSession();
+    let id;
+    try {
+      id = await this.mpSession.createSession();
+    } catch (e) {
+      this._mpLog(`Failed to create session: ${e.message}`);
+      return;
+    }
     const display = document.getElementById('mpSessionIdDisplay');
     const idText  = document.getElementById('mpSessionIdText');
     if (display) display.style.display = 'block';
@@ -8389,13 +8721,17 @@ class DigitalTwinApp {
     this._updateMpStatus();
   }
 
-  mpJoin() {
+  async mpJoin() {
     const input = document.getElementById('mpJoinInput');
     const id = input?.value?.trim();
     if (!id || id.length < 4) { this._mpLog('Enter a valid 6-character session ID'); return; }
     if (this.mpSession.sessionId) this.mpSession.disconnect();
-    this.mpSession.joinSession(id);
-    this._mpLog(`Joining session ${id} as RED TEAM...`);
+    try {
+      await this.mpSession.joinSession(id);
+      this._mpLog(`Joining session ${id} as RED TEAM...`);
+    } catch (e) {
+      this._mpLog(`Failed to join: ${e.message}`);
+    }
     this._updateMpStatus();
   }
 
@@ -8457,6 +8793,1246 @@ class DigitalTwinApp {
       `;
       if (disconnectBtn) disconnectBtn.style.display = 'block';
     }
+  }
+  // ── Evolutionary Attack Discovery ────────────────────────────────────────────
+  toggleEvolvePanel() {
+    const p = document.getElementById('evolveModePanel');
+    if (!p) return;
+    const open = p.style.display === 'flex';
+    p.style.display = open ? 'none' : 'flex';
+    if (!open && !this.evolution) {
+      this.evolution = new EvolutionEngine(this);
+    }
+  }
+
+  closeEvolvePanel() {
+    const p = document.getElementById('evolveModePanel');
+    if (p) p.style.display = 'none';
+  }
+
+  startEvolution() {
+    if (!this.evolution) this.evolution = new EvolutionEngine(this);
+    const gens = parseInt(document.getElementById('evolveGenInput')?.value) || 35;
+    const pop  = parseInt(document.getElementById('evolvePopInput')?.value)  || 50;
+    this.evolution.maxGenerations = Math.min(100, Math.max(5, gens));
+    this.evolution.popSize        = Math.min(100, Math.max(10, pop));
+
+    document.getElementById('evolveGenMax').textContent = this.evolution.maxGenerations;
+
+    const profileName = document.getElementById('aptProfileSelect')?.value;
+    this.evolution._seedProfile = profileName || null;
+    if (profileName) {
+      document.getElementById('evolveStatusLabel').textContent = `Seeded with ${profileName} genome — evolving...`;
+    } else {
+      document.getElementById('evolveStatusLabel').textContent = 'Running — evolving attack strategies...';
+    }
+    document.getElementById('btnEvolveStart').disabled = true;
+
+    this._evoResults = null;
+    this._heatOverlayActive = false;
+
+    this.evolution.onProgress = (gen, stats, eng) => {
+      const pct = (gen / eng.maxGenerations * 100).toFixed(1);
+      document.getElementById('evolveProgressBar').style.width = pct + '%';
+      document.getElementById('evolveGenCounter').textContent  = gen;
+      document.getElementById('evolveWinRate').textContent     = (stats.winRate * 100).toFixed(0) + '%';
+      document.getElementById('evolveBestFit').textContent     = stats.best.toFixed(0);
+      document.getElementById('evolveBattleCount').textContent = (gen * eng.popSize).toLocaleString();
+      document.getElementById('evolveWinCount').textContent    = eng.allWinPaths.length;
+      document.getElementById('evolvePathCount').textContent   = new Set(eng.allWinPaths.flatMap(p => p.map(s => s.nodeId))).size;
+      this._drawEvoChart(eng.history);
+    };
+
+    this.evolution.onComplete = (results) => {
+      this._evoResults = results;
+      document.getElementById('evolveStatusLabel').textContent = `Complete — ${results.totalBattles.toLocaleString()} battles · ${results.topGenomes.length} champions found`;
+      document.getElementById('btnEvolveStart').disabled = false;
+      document.getElementById('btnDeployChamp').disabled = false;
+      document.getElementById('btnDeployChamp').style.opacity = '1';
+      this._renderEvoResults(results);
+    };
+
+    this.evolution.start();
+  }
+
+  stopEvolution() {
+    if (this.evolution) this.evolution.stop();
+    document.getElementById('evolveStatusLabel').textContent = 'Stopped by user';
+    document.getElementById('btnEvolveStart').disabled = false;
+  }
+
+  deployChampion() {
+    if (!this.evolution?.topGenomes?.length) return;
+    this.closeEvolvePanel();
+    if (!this.battle?.active) this.startAIBattle();
+    const deployed = this.evolution.deployChampion();
+    if (deployed) {
+      const desc = this.evolution.topGenomes[0].describe();
+      this._appendBattleLog(`🧬 Champion genome deployed: ${desc}`, 'red');
+    }
+  }
+
+  switchEvoTab(tab) {
+    document.querySelectorAll('.evo-tab-btn').forEach(b => {
+      const active = b.dataset.tab === tab;
+      b.style.background = active ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)';
+      b.style.borderColor = active ? 'rgba(168,85,247,0.35)' : 'rgba(255,255,255,0.08)';
+      b.style.color = active ? '#c084fc' : 'var(--text-muted)';
+    });
+    ['chains','heatmap','champion'].forEach(t => {
+      const el = document.getElementById(`evoPane-${t}`);
+      if (el) el.style.display = t === tab ? 'block' : 'none';
+    });
+  }
+
+  _drawEvoChart(history) {
+    const canvas = document.getElementById('evolveChartCanvas');
+    if (!canvas || !history.length) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const bests = history.map(h => h.best);
+    const means = history.map(h => h.mean);
+    const maxV  = Math.max(...bests, 1);
+    const minV  = Math.min(...means, 0);
+    const scaleX = W / Math.max(history.length - 1, 1);
+    const scaleY = (H - 8) / (maxV - minV || 1);
+    const toY = v => H - 4 - (v - minV) * scaleY;
+
+    const drawLine = (data, color, glow) => {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = glow ? 2 : 1;
+      ctx.shadowBlur  = glow ? 8 : 0;
+      ctx.shadowColor = color;
+      data.forEach((v, i) => {
+        const x = i * scaleX, y = toY(v);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    };
+
+    // Win-rate bars (faint bg)
+    history.forEach((h, i) => {
+      const barH = h.winRate * (H - 8);
+      ctx.fillStyle = `rgba(34,197,94,${h.winRate * 0.12})`;
+      ctx.fillRect(i * scaleX, H - 4 - barH, scaleX, barH);
+    });
+
+    drawLine(means, 'rgba(168,85,247,0.5)', false);
+    drawLine(bests, '#c084fc', true);
+
+    // Generation markers every 5
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font      = '9px monospace';
+    history.forEach((h, i) => {
+      if ((i + 1) % 5 === 0) {
+        const x = i * scaleX;
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.fillRect(x, 0, 1, H);
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillText(i + 1, x - 4, H - 2);
+      }
+    });
+  }
+
+  _renderEvoResults(results) {
+    // ── Chains tab with probability tree (Feature 17) ──
+    const chainsEl = document.getElementById('evoChainsBody');
+    if (chainsEl) {
+      if (!results.chains.length) {
+        chainsEl.innerHTML = '<div style="font-size:0.6rem;color:rgba(255,255,255,0.2);text-align:center;padding:16px 0;">No winning chains found — increase generations</div>';
+      } else {
+        const maxCount = results.chains[0].count;
+        const chainSteps = results.chains.map(c => c.chain.split('  →  ').filter(Boolean));
+        const probTreeHtml = this._renderKillChainProbTree(chainSteps);
+        chainsEl.innerHTML = results.chains.map((c, i) => {
+          const pct = (c.count / maxCount * 100).toFixed(0);
+          const [step1, step2] = c.chain.split('  →  ');
+          return `<div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:5px;padding:7px 10px;font-size:0.58rem;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span style="color:rgba(168,85,247,0.7);font-weight:700;">#${i+1}</span>
+              <span style="color:#fbbf24;font-weight:700;">${c.count}× observed</span>
+            </div>
+            <div style="color:#ef4444;margin-bottom:2px;">${step1 || c.chain}</div>
+            ${step2 ? `<div style="color:rgba(239,68,68,0.6);padding-left:8px;">→ ${step2}</div>` : ''}
+            <div style="margin-top:5px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;">
+              <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7c3aed,#c084fc);border-radius:2px;"></div>
+            </div>
+          </div>`;
+        }).join('') + (probTreeHtml ? `<div style="margin-top:10px;padding:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(168,85,247,0.12);border-radius:6px;"><div style="font-size:0.55rem;font-weight:700;color:rgba(168,85,247,0.5);letter-spacing:0.08em;margin-bottom:6px;">PROBABILITY TREE</div>${probTreeHtml}</div>` : '');
+      }
+    }
+
+    // ── Heat map tab ──
+    const heatEl = document.getElementById('evoHeatBody');
+    if (heatEl) {
+      const maxNode = results.hotNodes[0]?.[1] || 1;
+      const maxTech = results.hotTechs[0]?.[1] || 1;
+      heatEl.innerHTML = `
+        <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.7);margin-bottom:4px;letter-spacing:0.08em;">MOST TARGETED NODES</div>
+        ${results.hotNodes.map(([id, cnt]) => {
+          const n = this.canvas?.nodes?.find(x => x.id === id);
+          const name = n?.name || id;
+          const pct = (cnt / maxNode * 100).toFixed(0);
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            <div style="flex:1;font-size:0.58rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+            <div style="width:80px;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;flex-shrink:0;">
+              <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#dc2626,#f87171);border-radius:3px;box-shadow:0 0 6px rgba(239,68,68,0.5);"></div>
+            </div>
+            <div style="font-size:0.55rem;color:#fbbf24;font-weight:700;width:24px;text-align:right;">${cnt}</div>
+          </div>`;
+        }).join('')}
+        <div style="font-size:0.6rem;font-weight:700;color:rgba(168,85,247,0.7);margin:10px 0 4px;letter-spacing:0.08em;">MOST USED TECHNIQUES</div>
+        ${results.hotTechs.map(([tech, cnt]) => {
+          const pct = (cnt / maxTech * 100).toFixed(0);
+          const short = tech.length > 36 ? tech.slice(0, 36) + '…' : tech;
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            <div style="flex:1;font-size:0.56rem;color:#c8d4e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${tech}">${short}</div>
+            <div style="width:60px;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;flex-shrink:0;">
+              <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#6d28d9,#a78bfa);border-radius:2px;"></div>
+            </div>
+            <div style="font-size:0.55rem;color:#a78bfa;font-weight:700;width:24px;text-align:right;">${cnt}</div>
+          </div>`;
+        }).join('')}`;
+    }
+
+    // ── Champion tab ──
+    const champEl = document.getElementById('evoChampBody');
+    if (champEl && results.topGenomes.length) {
+      const g = results.topGenomes[0];
+      const rows = g.toDisplayRows();
+      champEl.innerHTML = `
+        <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:6px;padding:10px;margin-bottom:8px;">
+          <div style="font-size:0.65rem;font-weight:700;color:#c084fc;margin-bottom:4px;">🏆 CHAMPION GENOME #${g.id}</div>
+          <div style="font-size:0.58rem;color:rgba(168,85,247,0.7);margin-bottom:8px;line-height:1.5;">${g.describe()}</div>
+          <div style="font-size:0.72rem;font-weight:700;color:#fbbf24;">Fitness: ${g.fitness.toFixed(0)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+          ${rows.map(r => {
+            if (r.raw) return `<div style="display:flex;justify-content:space-between;font-size:0.6rem;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:3px;">
+              <span style="color:var(--text-muted);">${r.label}</span>
+              <span style="color:#e2e8f0;font-weight:700;text-transform:uppercase;">${r.value}</span>
+            </div>`;
+            const pct = (r.value / r.max * 100);
+            return `<div style="padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:3px;">
+              <div style="display:flex;justify-content:space-between;font-size:0.58rem;margin-bottom:3px;">
+                <span style="color:var(--text-muted);">${r.label}</span>
+                <span style="color:#e2e8f0;font-weight:700;">${r.fmt(r.value)}</span>
+              </div>
+              <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;">
+                <div style="height:100%;width:${pct.toFixed(0)}%;background:linear-gradient(90deg,#7c3aed,#c084fc);border-radius:2px;"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        ${g.lastResult?.path?.length ? `
+        <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.7);margin-bottom:6px;letter-spacing:0.07em;">CHAMPION KILL CHAIN</div>
+        ${g.lastResult.path.map((s,i) => `
+          <div style="display:flex;gap:6px;margin-bottom:3px;font-size:0.56rem;">
+            <span style="color:rgba(168,85,247,0.5);flex-shrink:0;">${i+1}.</span>
+            <div>
+              <span style="color:${s.phase==='OBJECTIVE'?'#ef4444':s.phase==='OT_PIVOT'?'#f59e0b':'#a78bfa'};font-weight:700;">${s.phase}</span>
+              <span style="color:var(--text-muted);"> → </span>
+              <span style="color:#c8d4e8;">${s.nodeName}</span>
+              <div style="color:rgba(255,255,255,0.3);margin-top:1px;">${s.technique}</div>
+            </div>
+          </div>`).join('')}` : ''}`;
+    }
+  }
+
+  toggleHeatMapOverlay() {
+    this._heatOverlayActive = !this._heatOverlayActive;
+    const btn = document.getElementById('btnHeatOverlay');
+    if (btn) btn.textContent = this._heatOverlayActive ? '👁 HIDE OVERLAY' : '👁 OVERLAY ON CANVAS';
+    if (this.canvas) {
+      this.canvas.evolutionHeatMap = this._heatOverlayActive ? (this._evoResults?.nodeHeatMap || {}) : null;
+      this.canvas.evolutionEdgeMap = this._heatOverlayActive ? (this._evoResults?.hotEdges?.reduce((m,[k,v])=>{m[k]=v;return m;},{}) || {}) : null;
+    }
+  }
+
+  // ── MITRE ATT&CK Live Heatmap ───────────────────────────────────────────────
+  _getMitreTactics() {
+    return [
+      { id:'TA0043', name:'Recon',     color:'#6366f1', techniques:{ 'T1595':'Active Scan','T1589':'Gather Identity','T1590':'Network Info' } },
+      { id:'TA0001', name:'Init Access',color:'#ef4444', techniques:{ 'T1190':'Public Exploit','T1566':'Phishing','T1133':'Remote Svc','T1195':'Supply Chain','T1189':'Drive-by' } },
+      { id:'TA0002', name:'Execution', color:'#f59e0b', techniques:{ 'T1047':'WMI','T1059':'CLI','T1053':'Sched Task','T1072':'Soft Deploy' } },
+      { id:'TA0004', name:'Priv Esc',  color:'#f97316', techniques:{ 'T1134':'Token Imp','T1068':'Exploit','T1078':'Valid Accts' } },
+      { id:'TA0006', name:'Cred Access',color:'#ec4899', techniques:{ 'T1003':'OS Creds','T1558':'Steal Ticket','T1550':'Use Alt Auth' } },
+      { id:'TA0008', name:'Lateral Mov',color:'#8b5cf6', techniques:{ 'T1210':'Remote Exploit','T1021':'Remote Svc','T1091':'Removable Media' } },
+      { id:'TA0040', name:'Impact',    color:'#22c55e', techniques:{ 'T0836':'Modify Param','T0855':'Unauth Cmd','T0816':'Device Restart' } },
+      { id:'TA0106', name:'ICS Control',color:'#06b6d4', techniques:{ 'T0855':'GOOSE Flood','T0836':'Modbus Write','T0861':'OPC-UA Hijack','T0846':'EtherNet/IP' } },
+    ];
+  }
+
+  _mapTechniqueToMitre(technique) {
+    const t = technique.toLowerCase();
+    if (t.includes('phishing') || t.includes('watering') || t.includes('supply chain') || t.includes('usb') || t.includes('vpn')) return ['TA0001'];
+    if (t.includes('wmi') || t.includes('psexec') || t.includes('dcom') || t.includes('winrm') || t.includes('scheduled')) return ['TA0002'];
+    if (t.includes('token') || t.includes('system priv')) return ['TA0004'];
+    if (t.includes('hash') || t.includes('kerber') || t.includes('lsass') || t.includes('dcsync') || t.includes('credential')) return ['TA0006'];
+    if (t.includes('eternalblue') || t.includes('proxyshell') || t.includes('log4') || t.includes('cve') || t.includes('lateral') || t.includes('smb')) return ['TA0008'];
+    if (t.includes('dnp3') || t.includes('modbus') || t.includes('iec') || t.includes('goose') || t.includes('opc') || t.includes('ethernet/ip') || t.includes('cip')) return ['TA0106', 'TA0040'];
+    if (t.includes('wiper') || t.includes('crash') || t.includes('overwrite') || t.includes('impact')) return ['TA0040'];
+    return ['TA0001'];
+  }
+
+  toggleMitrePanel() {
+    const p = document.getElementById('mitrePanel');
+    if (!p) return;
+    if (p.style.display === 'none') {
+      p.style.display = 'block';
+      this._buildMitreGrid();
+    } else {
+      p.style.display = 'none';
+    }
+  }
+
+  _buildMitreGrid() {
+    const grid = document.getElementById('mitreGrid');
+    if (!grid) return;
+    this._mitreTactics = this._getMitreTactics();
+    this._mitreActive  = {};
+    grid.innerHTML = this._mitreTactics.map(tactic => `
+      <div class="mitre-col" data-tactic="${tactic.id}" style="flex-shrink:0;min-width:78px;">
+        <div style="font-size:0.5rem;font-weight:700;letter-spacing:0.06em;color:${tactic.color};text-align:center;margin-bottom:4px;white-space:nowrap;">${tactic.name}</div>
+        ${Object.entries(tactic.techniques).map(([id,name]) => `
+          <div class="mitre-cell" data-technique="${id}" title="${id}: ${name}" style="padding:3px 5px;margin-bottom:2px;border-radius:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);font-size:0.48rem;color:rgba(255,255,255,0.35);text-align:center;cursor:default;transition:all 0.3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${id}<br><span style="font-size:0.42rem;">${name}</span></div>
+        `).join('')}
+        <div class="mitre-tactic-bar" data-tactic="${tactic.id}" style="margin-top:4px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;"><div style="height:100%;width:0%;background:${tactic.color};border-radius:2px;transition:width 0.5s;box-shadow:0 0 6px ${tactic.color};"></div></div>
+      </div>
+    `).join('');
+  }
+
+  _fireMitreTechnique(technique) {
+    if (document.getElementById('mitrePanel')?.style.display === 'none') return;
+    const tacticIds = this._mapTechniqueToMitre(technique);
+    if (!this._mitreActive) this._mitreActive = {};
+    for (const tid of tacticIds) {
+      this._mitreActive[tid] = (this._mitreActive[tid] || 0) + 1;
+      const bar = document.querySelector(`.mitre-tactic-bar[data-tactic="${tid}"] div`);
+      if (bar) { const w = Math.min(100, (this._mitreActive[tid] * 15)); bar.style.width = w + '%'; }
+      const tactic = this._mitreTactics?.find(t => t.id === tid);
+      if (!tactic) continue;
+      for (const [techId] of Object.entries(tactic.techniques)) {
+        const cells = document.querySelectorAll(`.mitre-cell[data-technique="${techId}"]`);
+        cells.forEach(cell => {
+          cell.style.background = `rgba(${tid === 'TA0106' ? '6,182,212' : tid === 'TA0001' ? '239,68,68' : tid === 'TA0006' ? '236,72,153' : '139,92,246'},0.3)`;
+          cell.style.color = '#fff';
+          cell.style.borderColor = `rgba(${tid === 'TA0106' ? '6,182,212' : tid === 'TA0001' ? '239,68,68' : '139,92,246'},0.6)`;
+          cell.style.boxShadow = '0 0 8px currentColor';
+          setTimeout(() => {
+            cell.style.background = `rgba(${tid === 'TA0106' ? '6,182,212' : '139,92,246'},0.12)`;
+            cell.style.color = 'rgba(255,255,255,0.6)';
+          }, 3000);
+        });
+      }
+    }
+  }
+
+  // ── Blast Radius ──────────────────────────────────────────────────────────────
+  toggleBlastRadius() {
+    const node = this.canvas.selectedNode || this.canvas.nodes.find(n => n.status === 'compromised');
+    if (!node) return;
+    if (this.canvas.blastRadiusData?.origin === node.id) {
+      this.canvas.clearBlastRadius();
+    } else {
+      this.canvas.showBlastRadius(node.id);
+    }
+  }
+
+  // ── Kill Chain Trail ──────────────────────────────────────────────────────────
+  toggleKillChainTrail() {
+    if (!this.canvas) return;
+    this.canvas.killChainVisible = !this.canvas.killChainVisible;
+    if (this.canvas.killChainVisible && this.battle) {
+      this.canvas.updateKillChainFromBattle(this.battle);
+    }
+  }
+
+  // ── Zero-Day Surface ──────────────────────────────────────────────────────────
+  computeZeroDaySurface() {
+    if (!this._evoResults) return;
+    const { nodeHeatMap } = this._evoResults;
+    const allNodes = this.canvas?.nodes || [];
+    const hotNodeIds = new Set(Object.keys(nodeHeatMap));
+    const zeroDayNodes = allNodes.filter(n => hotNodeIds.has(n.id));
+    if (this.canvas) {
+      this.canvas.zeroDayNodes = new Set(zeroDayNodes.map(n => n.id));
+    }
+    return zeroDayNodes;
+  }
+
+  toggleZeroDaySurface() {
+    if (this.canvas?.zeroDayNodes?.size) {
+      this.canvas.zeroDayNodes = null;
+    } else {
+      this.computeZeroDaySurface();
+    }
+  }
+
+  // ── Screenshot Export ─────────────────────────────────────────────────────────
+  exportScreenshot() {
+    const canvas = this.canvas?.canvas || document.getElementById('networkCanvas');
+    if (!canvas) return;
+    const link  = document.createElement('a');
+    link.download = `aetheris-screenshot-${Date.now()}.png`;
+    link.href   = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  // ── Sigma Rule Generator ──────────────────────────────────────────────────────
+  generateSigmaRules() {
+    if (!this._evoResults?.chains?.length) {
+      alert('Run evolution first to generate Sigma rules from discovered attack chains.');
+      return;
+    }
+    const hotTechs = this._evoResults.hotTechs || [];
+
+    const rules = hotTechs.slice(0, 6).map(([tech, count], i) => {
+      const techLower = tech.toLowerCase();
+      let detection = '';
+      let logsource = '';
+      if (techLower.includes('wmi')) {
+        logsource = 'product: windows\ncategory: process_creation';
+        detection = 'selection:\n  CommandLine|contains:\n    - "wmic"\n    - "Win32_Process"\n  ParentImage|endswith: "\\\\svchost.exe"';
+      } else if (techLower.includes('hash') || techLower.includes('ntlm')) {
+        logsource = 'product: windows\ncategory: network_connection';
+        detection = 'selection:\n  DestinationPort: 445\n  Initiated: "true"\ncondition: selection | count() by SourceIp > 5';
+      } else if (techLower.includes('kerber')) {
+        logsource = 'product: windows\nservice: security';
+        detection = 'selection:\n  EventID: 4769\n  TicketEncryptionType: "0x17"\ncondition: selection';
+      } else if (techLower.includes('dcsync') || techLower.includes('replication')) {
+        logsource = 'product: windows\nservice: security';
+        detection = 'selection:\n  EventID: 4662\n  Properties|contains:\n    - "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2"\n    - "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"';
+      } else if (techLower.includes('modbus') || techLower.includes('dnp3') || techLower.includes('iec')) {
+        logsource = 'product: zeek\ncategory: network';
+        detection = 'selection:\n  proto: "modbus"\n  modbus.func_code|contains:\n    - "16"\n    - "FC16"\ncondition: selection';
+      } else if (techLower.includes('scheduled')) {
+        logsource = 'product: windows\ncategory: process_creation';
+        detection = 'selection:\n  Image|endswith: "\\\\schtasks.exe"\n  CommandLine|contains: "/create"\ncondition: selection';
+      } else {
+        logsource = 'category: process_creation\nproduct: windows';
+        detection = 'selection:\n  CommandLine|contains: "cmd.exe"\ncondition: selection';
+      }
+
+      return `# AETHERIS Auto-Generated Sigma Rule #${i+1}
+# Technique: ${tech} (observed ${count}x in evolution)
+# Generated: ${new Date().toISOString()}
+
+title: AETHERIS-EVOLVED-${String(i+1).padStart(3,'0')} - ${tech.split(' ')[0]} Detection
+id: aetheris-${Date.now()}-${i}
+status: experimental
+description: Auto-generated from evolutionary attack discovery. Technique observed ${count} times in winning strategies against this topology.
+references:
+  - https://attack.mitre.org/
+author: AETHERIS NetPilot Evolution Engine
+date: ${new Date().toISOString().split('T')[0]}
+logsource:
+  ${logsource}
+detection:
+  ${detection}
+  condition: selection
+falsepositives:
+  - Legitimate administrative activity
+level: ${count > 10 ? 'high' : 'medium'}
+tags:
+  - attack.discovery
+  - aetheris.evolved`;
+    }).join('\n\n---\n\n');
+
+    const blob = new Blob([rules], { type: 'text/plain' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `aetheris-sigma-rules-${Date.now()}.yml`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ── Segmentation Gap Finder ───────────────────────────────────────────────────
+  findSegmentationGaps() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+
+    const itNodes  = nodes.filter(n => n.type === 'it' || n.type === 'IT');
+    const otNodes  = nodes.filter(n => n.type === 'ot' || n.type === 'plc' || n.type === 'field');
+    const fwNodes  = nodes.filter(n => (n.role||'').toLowerCase().includes('firewall') || (n.name||'').toLowerCase().includes('firewall'));
+
+    const adj = {};
+    for (const n of nodes) adj[n.id] = new Set();
+    for (const l of links) {
+      const s = l.sourceId || l.source?.id || l.source;
+      const t = l.targetId || l.target?.id || l.target;
+      if (adj[s]) adj[s].add(t);
+      if (adj[t]) adj[t].add(s);
+    }
+
+    const gaps = [];
+    for (const it of itNodes) {
+      for (const ot of otNodes) {
+        for (const mid of (adj[it.id] || [])) {
+          if (adj[mid]?.has(ot.id)) {
+            const midNode = nodes.find(n => n.id === mid);
+            const isFW = fwNodes.some(f => f.id === mid);
+            if (!isFW) {
+              gaps.push({ from: it, via: midNode, to: ot });
+            }
+          }
+        }
+      }
+    }
+
+    if (this.canvas) {
+      this.canvas.segmentationGaps = gaps;
+    }
+    return gaps;
+  }
+
+  toggleSegmentationGaps() {
+    if (this.canvas?.segmentationGaps?.length) {
+      this.canvas.segmentationGaps = [];
+    } else {
+      const gaps = this.findSegmentationGaps();
+      if (!gaps.length) alert('No unprotected IT→OT paths found — good segmentation!');
+    }
+  }
+
+  // ── Blue Team Gap Analysis ────────────────────────────────────────────────────
+  showBlueGapAnalysis() {
+    const b = this.battle;
+    if (!b) return;
+
+    const allNodes = this.canvas?.nodes || [];
+    const blueLog  = b.blue?.actionLog || [];
+
+    const compromised = new Set(allNodes.filter(n=>n.status==='compromised').map(n=>n.id));
+    const contained   = new Set(allNodes.filter(n=>n.status==='isolated').map(n=>n.id));
+    const missed      = [...compromised].filter(id => !contained.has(id));
+
+    const detections = blueLog.filter(e => e.msg?.includes('CONFIRMED') || e.msg?.includes('detected')).length;
+
+    const html = `
+      <div style="background:rgba(6,9,20,0.95);border:1px solid rgba(45,125,210,0.3);border-radius:8px;padding:16px;font-size:0.7rem;max-width:500px;margin:0 auto;">
+        <div style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#60a5fa;margin-bottom:12px;letter-spacing:0.1em;">🔵 BLUE TEAM GAP ANALYSIS</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:5px;padding:8px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:#ef4444;">${missed.length}</div>
+            <div style="font-size:0.58rem;color:var(--text-muted);">Nodes missed</div>
+          </div>
+          <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:5px;padding:8px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:#22c55e;">${detections}</div>
+            <div style="font-size:0.58rem;color:var(--text-muted);">Detections fired</div>
+          </div>
+        </div>
+
+        ${missed.length ? `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.7);margin-bottom:5px;letter-spacing:0.07em;">UNDETECTED COMPROMISES</div>
+          ${missed.map(id => {
+            const n = allNodes.find(x=>x.id===id);
+            return `<div style="padding:4px 8px;background:rgba(239,68,68,0.07);border-left:2px solid #ef4444;margin-bottom:3px;border-radius:0 3px 3px 0;font-size:0.62rem;color:#e2e8f0;">${n?.name||id}</div>`;
+          }).join('')}
+        </div>` : '<div style="color:#22c55e;font-size:0.65rem;margin-bottom:10px;">✓ All compromised nodes were detected</div>'}
+
+        <div style="font-size:0.6rem;font-weight:700;color:rgba(96,165,250,0.7);margin-bottom:5px;letter-spacing:0.07em;">COVERAGE RECOMMENDATION</div>
+        <div style="font-size:0.62rem;color:var(--text-muted);line-height:1.6;">
+          ${missed.length > 2 ? '⚠ Add OT-specific detection rules — blue team is blind to ICS protocol abuse.' : ''}
+          ${detections < 3 ? '⚠ Detection coverage is low — consider adding honeypots on entry nodes.' : ''}
+          ${missed.length === 0 && detections >= 3 ? '✅ Strong defensive posture — consider running more generations to stress-test.' : ''}
+          Deploy Sigma rules from the EVOLVE panel to close identified gaps.
+        </div>
+      </div>`;
+
+    let modal = document.getElementById('gapAnalysisModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'gapAnalysisModal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:35000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+      modal.onclick = (e) => { if(e.target===modal) modal.remove(); };
+      document.body.appendChild(modal);
+    }
+    modal.innerHTML = html + '<button onclick="document.getElementById(\'gapAnalysisModal\').remove()" style="display:block;margin:12px auto 0;padding:6px 20px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:var(--text-muted);font-size:0.65rem;cursor:pointer;">CLOSE</button>';
+    modal.style.display = 'flex';
+  }
+
+  _appendBattleLog(msg, team) {
+    if (this.battle?.red && team === 'red') this.battle.red.actionLog.unshift({ ts: Date.now(), team: 'red', msg });
+    if (this.battle?.blue && team === 'blue') this.battle.blue.actionLog.unshift({ ts: Date.now(), team: 'blue', msg });
+    this._renderBattleLog?.();
+  }
+
+  // ── Incident Report ──────────────────────────────────────────────────────────
+  async generateIncidentReport() {
+    const modal   = document.getElementById('incidentReportModal');
+    const loading = document.getElementById('incidentReportLoading');
+    const content = document.getElementById('incidentReportContent');
+    if (!modal) return;
+
+    modal.style.display = 'block';
+    loading.style.display = 'block';
+    content.style.display = 'none';
+
+    const b = this.battle;
+    if (!b) { loading.style.display = 'none'; content.innerHTML = '<p>No battle data available.</p>'; content.style.display = 'block'; return; }
+
+    const log     = b.combinedLog || [];
+    const winner  = b.winner || 'unknown';
+    const elapsed = b.elapsedLabel || '00:00';
+    const nodes   = this.canvas.nodes || [];
+    const compromised = nodes.filter(n => n.status === 'compromised').map(n => n.name || n.id);
+    const isolated    = nodes.filter(n => n.status === 'isolated').map(n => n.name || n.id);
+
+    const logText = log.slice(0, 40).map(e => {
+      const ts = new Date(e.ts).toISOString().substr(11, 8);
+      return `[${ts}] [${e.team?.toUpperCase() || 'SYS'}] ${e.msg}`;
+    }).join('\n');
+
+    const prompt = `You are a senior ICS/OT cybersecurity analyst. Write a formal CISO-level post-incident report based on the following AETHERIS NetPilot simulation data.
+
+BATTLE OUTCOME: ${winner.toUpperCase()} TEAM WINS
+DURATION: ${elapsed}
+RED SCORE: ${b.red?.score || 0}  |  BLUE SCORE: ${b.blue?.score || 0}
+COMPROMISED NODES: ${compromised.join(', ') || 'none'}
+ISOLATED NODES: ${isolated.join(', ') || 'none'}
+TOTAL NODES: ${nodes.length}
+
+BATTLE LOG (chronological):
+${logText}
+
+Write the report in this exact HTML structure (use inline styles, no external CSS):
+<h2 style="...">INCIDENT REPORT — [WINNER] TEAM VICTORY</h2>
+Then sections: EXECUTIVE SUMMARY, ATTACK TIMELINE (formatted table with timestamp/actor/action/technique columns), BLAST RADIUS & IMPACT, INDICATORS OF COMPROMISE (IOCs), MITRE ATT&CK TECHNIQUES OBSERVED, CVSS SEVERITY ASSESSMENT, REMEDIATION RECOMMENDATIONS (numbered list), LESSONS LEARNED.
+
+Use a dark military/cyber aesthetic: background transparent, text #c8d4e8, headings in #ef4444 (red) or #60a5fa (blue), tables with border-collapse, alternating row shades. Make it detailed, technical, and realistic — reference actual CVEs and ICS attack techniques mentioned in the log. Minimum 600 words.`;
+
+    let reportHtml;
+    try {
+      reportHtml = await this.llm.sendPrompt(prompt, nodes, [], 'incident-report');
+    } catch (e) {
+      reportHtml = `<p style="color:#ef4444;">Error generating report: ${e.message}</p>`;
+    }
+
+    // If the LLM returned a mock/plain-text response, wrap it nicely
+    if (!reportHtml.includes('<')) {
+      reportHtml = reportHtml.split('\n').map(line => {
+        if (line.startsWith('##')) return `<h3 style="color:#60a5fa;font-family:'Orbitron',sans-serif;font-size:0.72rem;letter-spacing:0.1em;margin:20px 0 8px;border-bottom:1px solid rgba(96,165,250,0.2);padding-bottom:6px;">${line.replace(/^#+\s*/,'')}</h3>`;
+        if (line.startsWith('#'))  return `<h2 style="color:#ef4444;font-family:'Orbitron',sans-serif;font-size:0.85rem;letter-spacing:0.12em;margin:24px 0 10px;">${line.replace(/^#+\s*/,'')}</h2>`;
+        if (line.match(/^\d+\./)) return `<p style="margin:4px 0 4px 12px;">${line}</p>`;
+        if (line.trim() === '')   return '<br>';
+        return `<p style="margin:4px 0;">${line}</p>`;
+      }).join('');
+    }
+
+    // Store for export
+    this._lastReportHtml = reportHtml;
+    this._lastReportMeta = { winner, elapsed, redScore: b.red?.score || 0, blueScore: b.blue?.score || 0 };
+
+    loading.style.display = 'none';
+    content.innerHTML = reportHtml;
+    content.style.display = 'block';
+  }
+
+  exportIncidentReport() {
+    const meta    = this._lastReportMeta || {};
+    const body    = this._lastReportHtml || '<p>No report generated.</p>';
+    const date    = new Date().toISOString().replace('T', ' ').substr(0, 19);
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AETHERIS Incident Report — ${date}</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{background:#060912;color:#c8d4e8;font-family:'Fira Code',monospace;font-size:13px;line-height:1.7;max-width:900px;margin:0 auto;padding:40px 32px;}
+  h1{font-family:'Orbitron',sans-serif;color:#ef4444;letter-spacing:.14em;font-size:1.1rem;border-bottom:2px solid rgba(239,68,68,.3);padding-bottom:12px;}
+  .meta{display:flex;gap:32px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:24px;font-size:11px;}
+  .meta span{color:#64748b;} .meta strong{color:#e2e8f0;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;}
+  th{background:rgba(239,68,68,.12);color:#ef4444;padding:8px 10px;text-align:left;font-size:11px;letter-spacing:.06em;}
+  td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+</style>
+</head>
+<body>
+<h1>📋 AETHERIS INCIDENT REPORT</h1>
+<div class="meta">
+  <div><span>Generated: </span><strong>${date} UTC</strong></div>
+  <div><span>Outcome: </span><strong style="color:${meta.winner==='red'?'#ef4444':'#22c55e'}">${(meta.winner||'?').toUpperCase()} TEAM WINS</strong></div>
+  <div><span>Duration: </span><strong>${meta.elapsed||'--'}</strong></div>
+  <div><span>Red Score: </span><strong>${meta.redScore||0}</strong></div>
+  <div><span>Blue Score: </span><strong>${meta.blueScore||0}</strong></div>
+</div>
+${body}
+<p style="margin-top:40px;font-size:10px;color:#374151;border-top:1px solid rgba(255,255,255,.05);padding-top:12px;">Generated by AETHERIS NetPilot — ICS/OT Cybersecurity Simulation Platform</p>
+</body></html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `aetheris-incident-report-${Date.now()}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FEATURES 13-24 IMPLEMENTATION
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Feature 13: Animated Battle Packets ─────────────────────────────
+  toggleBattlePackets() {
+    if (!this.canvas) return;
+    this.canvas.battlePacketsVisible = !this.canvas.battlePacketsVisible;
+    const btn = document.getElementById('btnBattlePackets');
+    if (btn) btn.style.background = this.canvas.battlePacketsVisible
+      ? 'rgba(239,68,68,0.25)' : 'rgba(239,68,68,0.08)';
+  }
+
+  // Feature 14: Attack Timeline ─────────────────────────────────────
+  toggleTimeline() {
+    let panel = document.getElementById('attackTimeline');
+    if (!panel) return;
+    const visible = panel.style.display !== 'none' && panel.style.display !== '';
+    panel.style.display = visible ? 'none' : 'block';
+    if (!visible) this._renderTimeline();
+  }
+
+  _renderTimeline() {
+    const panel = document.getElementById('timelineInner');
+    if (!panel) return;
+    const b = this.battle;
+    const log = (b?.combinedLog || []).slice(-60).reverse();
+    if (!log.length) { panel.innerHTML = '<div style="color:#475569;font-size:0.65rem;padding:10px;">No battle events yet.</div>'; return; }
+
+    const startTs = log[0]?.ts || 0;
+    const endTs   = log[log.length - 1]?.ts || startTs + 1;
+    const span    = endTs - startTs || 1;
+
+    panel.innerHTML = log.map(e => {
+      const isRed  = e.team === 'red';
+      const left   = Math.round(((e.ts - startTs) / span) * 80);
+      const color  = isRed ? '#ef4444' : '#2d7dd2';
+      const label  = (e.msg || '').slice(0, 32);
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:0.58rem;">
+        <span style="color:${color};font-weight:700;width:28px;flex-shrink:0;">${isRed?'RED':'BLUE'}</span>
+        <div style="flex:1;position:relative;height:14px;background:rgba(255,255,255,0.04);border-radius:3px;overflow:hidden;">
+          <div style="position:absolute;left:${left}%;width:12%;height:100%;background:${color};opacity:0.7;border-radius:3px;"></div>
+          <span style="position:absolute;left:${Math.min(left+13,50)}%;top:50%;transform:translateY(-50%);font-size:0.52rem;color:rgba(255,255,255,0.6);white-space:nowrap;">${label}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Feature 15: Stealth Meters ─────────────────────────────────────
+  toggleStealthMeters() {
+    if (!this.canvas) return;
+    this.canvas.stealthMetersVisible = !this.canvas.stealthMetersVisible;
+    const btn = document.getElementById('btnStealth');
+    if (btn) btn.style.background = this.canvas.stealthMetersVisible
+      ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.08)';
+  }
+
+  // Feature 16: Threat Actor Dossier ────────────────────────────────
+  _getDossierData() {
+    return {
+      'Sandworm': {
+        nation: 'Russia (GRU Sandworm / Voodoo Bear)',
+        targets: 'Critical infrastructure — power grids, water, gas pipelines',
+        techniques: 'ICS protocol abuse (IEC-61850), destructive wiper payloads (Industroyer2), living-off-the-land',
+        incidents: ['2015–2016 Ukraine Power Grid Blackouts', '2022 Industroyer2 Substation Attack', 'NotPetya global wiper campaign'],
+        risk: 'CRITICAL',
+      },
+      'APT28 (Fancy Bear)': {
+        nation: 'Russia (GRU 85th GTsSS)',
+        targets: 'Government, military, election infrastructure, defense contractors',
+        techniques: 'Spear-phishing, credential harvesting, NTLM relay, VPN exploitation',
+        incidents: ['2016 DNC/DCCC intrusion', '2017 German Bundestag breach', '2023 Ukrainian government targeting'],
+        risk: 'HIGH',
+      },
+      'DarkSide (Colonial)': {
+        nation: 'Russian-speaking cybercriminal group',
+        targets: 'Critical infrastructure operators, energy sector',
+        techniques: 'RaaS double-extortion, AD exploitation, lateral movement via cobalt strike',
+        incidents: ['2021 Colonial Pipeline ransomware (fuel supply disruption)', 'DarkSide RaaS affiliate network operations'],
+        risk: 'HIGH',
+      },
+      'TRITON/TRISIS': {
+        nation: 'Russia (CLAB / Triton group)',
+        targets: 'Safety Instrumented Systems (SIS), petrochemical facilities',
+        techniques: 'SIS protocol manipulation (TriStation), disabling safety systems, physical consequence attacks',
+        incidents: ['2017 Saudi Aramco TRITON/TRISIS attack (Schneider Triconex SIS)', '2019 follow-on operations'],
+        risk: 'CRITICAL',
+      },
+      'Volt Typhoon': {
+        nation: 'China (PRC state-sponsored)',
+        targets: 'US critical infrastructure — energy, water, telecoms, transportation',
+        techniques: 'Living-off-the-land (LOTL), pre-positioning, legitimate admin tools, patient persistence',
+        incidents: ['2023 CISA/NSA advisory on pre-positioning in US CI', '2024 Pacific military logistics targeting'],
+        risk: 'CRITICAL',
+      },
+    };
+  }
+
+  toggleDossierPanel() {
+    let panel = document.getElementById('dossierPanel');
+    if (!panel) return;
+    const visible = panel.style.display !== 'none' && panel.style.display !== '';
+    if (visible) { panel.style.display = 'none'; return; }
+    this._updateDossierPanel();
+    panel.style.display = 'flex';
+  }
+
+  _updateDossierPanel() {
+    const panel = document.getElementById('dossierBody');
+    if (!panel) return;
+    const sel = document.getElementById('aptProfileSelect');
+    const aptName = sel?.value || 'Sandworm';
+    const dossiers = this._getDossierData();
+    const d = dossiers[aptName] || dossiers['Sandworm'];
+    const riskColor = d.risk === 'CRITICAL' ? '#ef4444' : '#f59e0b';
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#c084fc;font-weight:700;">${aptName}</div>
+        <span style="font-size:0.58rem;font-weight:700;padding:2px 8px;background:${riskColor}22;border:1px solid ${riskColor}66;border-radius:3px;color:${riskColor};">${d.risk}</span>
+      </div>
+      <div style="font-size:0.6rem;color:var(--text-muted);margin-bottom:6px;"><span style="color:#94a3b8;font-weight:700;">ATTRIBUTION:</span> ${d.nation}</div>
+      <div style="font-size:0.6rem;color:var(--text-muted);margin-bottom:6px;"><span style="color:#94a3b8;font-weight:700;">TARGETS:</span> ${d.targets}</div>
+      <div style="font-size:0.6rem;color:var(--text-muted);margin-bottom:8px;"><span style="color:#94a3b8;font-weight:700;">TECHNIQUES:</span> ${d.techniques}</div>
+      <div style="font-size:0.58rem;font-weight:700;color:rgba(168,85,247,0.6);letter-spacing:0.07em;margin-bottom:5px;">KNOWN INCIDENTS</div>
+      ${d.incidents.map(inc => `<div style="padding:4px 8px;border-left:2px solid rgba(168,85,247,0.4);margin-bottom:4px;font-size:0.6rem;color:#cbd5e1;line-height:1.4;">• ${inc}</div>`).join('')}
+    `;
+  }
+
+  // Feature 17: Kill Chain Probability Tree (enhanced chains tab) ────
+  _renderKillChainProbTree(chains) {
+    if (!chains?.length) return null;
+    const stepCounts = {};
+    let maxStep = 0;
+    chains.forEach(chain => {
+      chain.forEach((step, i) => {
+        const key = `${i}:${step}`;
+        stepCounts[key] = (stepCounts[key] || 0) + 1;
+        maxStep = Math.max(maxStep, i);
+      });
+    });
+    const total = chains.length;
+    let html = '<div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:6px;">Kill chain probability tree — width = frequency across all discovered chains.</div>';
+    for (let i = 0; i <= maxStep; i++) {
+      const stepEntries = Object.entries(stepCounts)
+        .filter(([k]) => k.startsWith(`${i}:`))
+        .map(([k, c]) => [k.slice(k.indexOf(':') + 1), c])
+        .sort((a, b) => b[1] - a[1]);
+      if (!stepEntries.length) continue;
+      html += `<div style="margin-bottom:4px;">
+        <div style="font-size:0.52rem;color:rgba(168,85,247,0.5);letter-spacing:0.08em;margin-bottom:3px;">STEP ${i + 1}</div>`;
+      stepEntries.forEach(([tech, count]) => {
+        const pct = Math.round((count / total) * 100);
+        const color = pct > 70 ? '#22c55e' : pct > 40 ? '#f59e0b' : '#ef4444';
+        html += `<div style="margin-bottom:3px;display:flex;align-items:center;gap:5px;">
+          <div style="width:${Math.max(4, pct)}%;height:12px;background:${color};opacity:0.7;border-radius:2px;min-width:4px;"></div>
+          <span style="font-size:0.55rem;color:${color};font-weight:700;">${pct}%</span>
+          <span style="font-size:0.55rem;color:rgba(255,255,255,0.5);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tech}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    return html;
+  }
+
+  // Feature 18: Cascading Failure Model ─────────────────────────────
+  _checkCascadingFailure(nodeId, depth = 0) {
+    if (depth >= 2) return;
+    const node = this.canvas?.nodes.find(n => n.id === nodeId);
+    if (!node || node.status !== 'compromised') return;
+    const links = this.canvas?.links.filter(l => l.sourceId === nodeId || l.targetId === nodeId) || [];
+    for (const link of links) {
+      if ((link.load || 0) < 0.6) continue;
+      if (Math.random() > (link.load || 0.7) * 0.4) continue;
+      const neighborId = link.sourceId === nodeId ? link.targetId : link.sourceId;
+      const neighbor = this.canvas?.nodes.find(n => n.id === neighborId);
+      if (!neighbor || neighbor.status === 'compromised' || neighbor.status === 'isolated') continue;
+      neighbor.status = 'degraded';
+      if (this.canvas.flashBattleEffect) this.canvas.flashBattleEffect(neighborId, 'orange');
+      this._appendBattleLog(`⚡ CASCADE: ${neighbor.name || neighborId} degraded via overloaded link`, 'red');
+      setTimeout(() => this._checkCascadingFailure(neighborId, depth + 1), 800);
+    }
+  }
+
+  // Feature 19: Time-of-Day Attack Modeling ─────────────────────────
+  onSimHourChange() {
+    const hour = parseInt(document.getElementById('simHour')?.value || '9');
+    const label = document.getElementById('simHourLabel');
+    if (label) label.textContent = `🕐 Sim Hour: ${String(hour).padStart(2, '0')}:00`;
+  }
+
+  _getTimeModifier() {
+    const hour = parseInt(document.getElementById('simHour')?.value || '9');
+    const isOffHours = hour >= 22 || hour < 6;
+    return {
+      attackBonus:   isOffHours ? 0.20 : 0,
+      defenseDebuff: isOffHours ? 0.30 : 0,
+      otBonus:       isOffHours ? 0.15 : 0,
+      isOffHours,
+    };
+  }
+
+  // Feature 20: Process Physics Coupling ────────────────────────────
+  _applyPhysicsImpact(nodeId) {
+    const node = this.canvas?.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const otTypes = ['plc', 'scada', 'hmi', 'sensor', 'actuator', 'reactor', 'siemens-plc', 'ab-plc', 'sis-controller', 'emerson-dcs', 'historian'];
+    const isOT = otTypes.some(t => (node.type || '').toLowerCase().includes(t) || (node.id || '').toLowerCase().includes(t));
+    if (!isOT) return;
+    const ps = window.physicsSim;
+    if (ps) {
+      if (typeof ps.forceSpikeNode === 'function') ps.forceSpikeNode(nodeId);
+      else if (typeof ps.injectAnomaly === 'function') ps.injectAnomaly();
+      else {
+        // Direct state spike
+        if (ps.temperature !== undefined) ps.temperature = Math.min(120, ps.temperature + 15 + Math.random() * 20);
+        if (ps.pressure !== undefined)    ps.pressure    = Math.min(3.0,  ps.pressure    + 0.3  + Math.random() * 0.4);
+      }
+    }
+    this._appendBattleLog(`⚡ PHYSICS IMPACT: ${node.name || nodeId} → process state spiked`, 'red');
+  }
+
+  // Feature 21: Side-by-Side Battle Comparison ───────────────────────
+  openCompareModal() {
+    const modal = document.getElementById('compareModal');
+    if (modal) { modal.style.display = 'flex'; return; }
+    this._createCompareModal();
+  }
+
+  _createCompareModal() {
+    const div = document.createElement('div');
+    div.id = 'compareModal';
+    div.style.cssText = 'position:fixed;inset:0;z-index:40000;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);';
+    div.innerHTML = `
+      <div style="background:linear-gradient(160deg,#080d1c,#0d1428);border:1px solid rgba(56,189,248,0.3);border-radius:12px;width:760px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="padding:14px 20px;background:rgba(56,189,248,0.07);border-bottom:1px solid rgba(56,189,248,0.15);display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:0.72rem;font-weight:700;color:#38bdf8;letter-spacing:0.12em;">⚖ BATTLE COMPARISON</div>
+          <button onclick="document.getElementById('compareModal').style.display='none'" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-muted);padding:3px 10px;font-size:0.65rem;cursor:pointer;">✕</button>
+        </div>
+        <div style="padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px;overflow-y:auto;">
+          ${['A','B'].map(side => `
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;">
+            <div style="font-size:0.65rem;font-weight:700;color:#38bdf8;margin-bottom:8px;letter-spacing:0.08em;">BATTLE ${side}</div>
+            <div style="margin-bottom:6px;">
+              <div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:3px;">APT PROFILE</div>
+              <select id="cmp${side}Profile" style="width:100%;background:rgba(0,0,0,0.5);border:1px solid rgba(56,189,248,0.2);border-radius:4px;color:#e2e8f0;padding:4px 6px;font-size:0.6rem;">
+                <option value="">Random</option>
+                <option value="Sandworm">Sandworm</option>
+                <option value="APT28 (Fancy Bear)">APT28 Fancy Bear</option>
+                <option value="DarkSide (Colonial)">DarkSide</option>
+                <option value="TRITON/TRISIS">TRITON/TRISIS</option>
+                <option value="Volt Typhoon">Volt Typhoon</option>
+              </select>
+            </div>
+            <div id="cmpResult${side}" style="margin-top:8px;font-size:0.62rem;color:var(--text-muted);min-height:80px;"></div>
+          </div>`).join('')}
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;">
+          <button onclick="window.appInstance?.runComparison()" style="flex:1;padding:8px;background:linear-gradient(135deg,rgba(56,189,248,0.2),rgba(168,85,247,0.15));border:1px solid rgba(56,189,248,0.4);border-radius:5px;color:#38bdf8;font-size:0.65rem;font-weight:700;cursor:pointer;letter-spacing:0.06em;">▶ RUN COMPARISON (100 rounds each)</button>
+        </div>
+        <div id="cmpSummary" style="padding:0 20px 14px;font-size:0.62rem;color:var(--text-muted);display:none;"></div>
+      </div>`;
+    document.body.appendChild(div);
+  }
+
+  runComparison() {
+    const profiles = ['A','B'].map(s => document.getElementById(`cmp${s}Profile`)?.value || '');
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    if (!nodes.length) { alert('Load a topology first.'); return; }
+
+    const results = profiles.map((profile, idx) => {
+      const side = ['A','B'][idx];
+      const div = document.getElementById(`cmpResult${side}`);
+      if (div) div.innerHTML = '<span style="color:#94a3b8;">Running...</span>';
+      let wins = 0, redScore = 0, blueScore = 0;
+      const techCounts = {};
+      for (let i = 0; i < 100; i++) {
+        const battle = new HeadlessBattle(nodes, links);
+        if (profile && typeof AttackGenome !== 'undefined') {
+          const apt = AttackGenome.APT_PROFILES[profile];
+          if (apt) battle.redGenome = new AttackGenome(apt);
+        }
+        const result = battle.run();
+        if (result.winner === 'red') wins++;
+        redScore  += result.red?.score  || 0;
+        blueScore += result.blue?.score || 0;
+        (result.techniques || []).forEach(t => { techCounts[t] = (techCounts[t]||0)+1; });
+      }
+      const topTechs = Object.entries(techCounts).sort((a,b)=>b[1]-a[1]).slice(0,4);
+      const html = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+          <div style="background:rgba(239,68,68,0.1);border-radius:4px;padding:6px;text-align:center;">
+            <div style="font-size:1.1rem;font-weight:700;color:#ef4444;">${wins}%</div>
+            <div style="font-size:0.52rem;color:var(--text-muted);">Red win rate</div>
+          </div>
+          <div style="background:rgba(45,125,210,0.1);border-radius:4px;padding:6px;text-align:center;">
+            <div style="font-size:1.1rem;font-weight:700;color:#2d7dd2;">${100-wins}%</div>
+            <div style="font-size:0.52rem;color:var(--text-muted);">Blue win rate</div>
+          </div>
+        </div>
+        <div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:4px;font-weight:700;letter-spacing:0.06em;">TOP TECHNIQUES</div>
+        ${topTechs.map(([t,c])=>`<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
+          <div style="width:${Math.round(c/3)}px;max-width:80px;height:8px;background:#a855f7;opacity:0.7;border-radius:2px;"></div>
+          <span style="font-size:0.52rem;color:#cbd5e1;">${t} (${c})</span>
+        </div>`).join('')}`;
+      if (div) div.innerHTML = html;
+      return { wins, redScore: Math.round(redScore/100), blueScore: Math.round(blueScore/100), topTechs };
+    });
+
+    const summary = document.getElementById('cmpSummary');
+    if (summary && results[0] && results[1]) {
+      const winner = results[0].wins > results[1].wins ? 'A' : results[1].wins > results[0].wins ? 'B' : 'TIE';
+      summary.innerHTML = `<div style="text-align:center;font-weight:700;color:${winner==='TIE'?'#f59e0b':'#22c55e'};">${winner==='TIE'?'🏁 TIE':'🏆 BATTLE ' + winner + ' wins (' + (winner==='A'?results[0].wins:results[1].wins) + '% red win rate vs ' + (winner==='A'?results[1].wins:results[0].wins) + '%)'}</div>`;
+      summary.style.display = 'block';
+    }
+  }
+
+  // Feature 22: Idle Traffic Toggle ─────────────────────────────────
+  toggleIdleTraffic() {
+    if (!this.canvas) return;
+    this.canvas.idleTrafficVisible = !this.canvas.idleTrafficVisible;
+    const btn = document.getElementById('btnIdleTraffic');
+    if (btn) btn.style.background = this.canvas.idleTrafficVisible
+      ? 'rgba(56,189,248,0.2)' : 'rgba(56,189,248,0.08)';
+  }
+
+  // Feature 23: Exhaustive Attack Graph BFS ─────────────────────────
+  runAttackGraph() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    if (!nodes.length) { alert('Load a topology first.'); return; }
+
+    const adj = {};
+    nodes.forEach(n => { adj[n.id] = []; });
+    links.forEach(l => {
+      if (l.status !== 'offline' && l.status !== 'isolated') {
+        adj[l.sourceId]?.push(l.targetId);
+        adj[l.targetId]?.push(l.sourceId);
+      }
+    });
+
+    const otTypes = ['plc','scada','hmi','reactor','sis','historian','actuator','sensor'];
+    const isOT = n => otTypes.some(t => (n.type||'').toLowerCase().includes(t) || (n.id||'').toLowerCase().includes(t));
+    const isEntry = n => (n.type||'').toLowerCase().includes('it') || n.id.startsWith('IT') || n.id.startsWith('CORP') || n.id.startsWith('ENG');
+    const isFirewall = n => (n.type||'').toLowerCase().includes('fw') || (n.role||'').toLowerCase().includes('firewall');
+
+    const entryNodes = nodes.filter(isEntry);
+    const otNodes    = nodes.filter(isOT);
+    const paths = [];
+    const visited = new Set();
+
+    const bfs = (startId) => {
+      const queue = [[startId]];
+      const seen  = new Set([startId]);
+      while (queue.length && paths.length < 500) {
+        const path = queue.shift();
+        const curr = path[path.length - 1];
+        const node = nodes.find(n => n.id === curr);
+        if (node && isOT(node) && path.length > 1) {
+          paths.push([...path]);
+          continue;
+        }
+        if (path.length > 8) continue;
+        for (const next of (adj[curr] || [])) {
+          if (!seen.has(next)) {
+            seen.add(next);
+            queue.push([...path, next]);
+          }
+        }
+      }
+    };
+
+    entryNodes.forEach(en => bfs(en.id));
+
+    const critPaths = paths.filter(p => {
+      const end = nodes.find(n => n.id === p[p.length-1]);
+      return end && isOT(end);
+    });
+
+    const pivotCounts = {};
+    paths.forEach(p => p.slice(1, -1).forEach(id => { pivotCounts[id] = (pivotCounts[id]||0)+1; }));
+    const topPivots = Object.entries(pivotCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+    const getLabel = id => nodes.find(n=>n.id===id)?.name || id;
+    const top10 = critPaths.slice(0, 10).map(p => p.map(getLabel).join(' → '));
+
+    this._showAttackGraphModal({ totalPaths: paths.length, critPaths: critPaths.length, topPivots, top10, nodeCount: nodes.length });
+  }
+
+  _showAttackGraphModal({ totalPaths, critPaths, topPivots, top10, nodeCount }) {
+    let modal = document.getElementById('attackGraphModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'attackGraphModal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:40000;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);';
+      modal.onclick = e => { if (e.target === modal) modal.remove(); };
+      document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+      <div style="background:linear-gradient(160deg,#07100e,#0d1e1a);border:1px solid rgba(251,191,36,0.3);border-radius:12px;width:680px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="padding:14px 20px;background:rgba(251,191,36,0.07);border-bottom:1px solid rgba(251,191,36,0.15);display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:0.72rem;font-weight:700;color:#fbbf24;letter-spacing:0.12em;">🗺 EXHAUSTIVE ATTACK GRAPH</div>
+          <button onclick="document.getElementById('attackGraphModal').remove()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-muted);padding:3px 10px;font-size:0.65rem;cursor:pointer;">✕</button>
+        </div>
+        <div style="padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+            ${[['Nodes Analysed', nodeCount, '#60a5fa'], ['Total Paths', totalPaths, '#a855f7'], ['Critical (OT)', critPaths, '#ef4444'], ['Reachability', Math.round(critPaths/Math.max(1,totalPaths)*100)+'%', '#f59e0b']].map(([l,v,c])=>`
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:8px;text-align:center;">
+              <div style="font-size:1.2rem;font-weight:700;color:${c};">${v}</div>
+              <div style="font-size:0.52rem;color:var(--text-muted);">${l}</div>
+            </div>`).join('')}
+          </div>
+          <div>
+            <div style="font-size:0.6rem;font-weight:700;color:rgba(251,191,36,0.6);letter-spacing:0.08em;margin-bottom:6px;">PIVOT NODES (MOST TRAVERSED)</div>
+            ${topPivots.map(([id, c]) => {
+              const n = (this.canvas?.nodes||[]).find(x=>x.id===id);
+              return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <div style="width:${Math.min(100,c*8)}px;height:10px;background:#fbbf24;opacity:0.6;border-radius:2px;"></div>
+                <span style="font-size:0.58rem;color:#e2e8f0;">${n?.name||id}</span>
+                <span style="font-size:0.55rem;color:#94a3b8;">(${c} paths)</span>
+              </div>`;
+            }).join('')}
+          </div>
+          <div>
+            <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.6);letter-spacing:0.08em;margin-bottom:6px;">TOP CRITICAL PATHS TO OT</div>
+            ${top10.map((p,i)=>`<div style="padding:4px 8px;margin-bottom:3px;background:rgba(239,68,68,0.06);border-left:2px solid rgba(239,68,68,0.3);font-size:0.58rem;color:#cbd5e1;font-family:var(--font-mono);">${i+1}. ${p}</div>`).join('') || '<div style="color:var(--text-muted);font-size:0.62rem;">No critical paths found — network may be well-segmented.</div>'}
+          </div>
+        </div>
+      </div>`;
+    modal.style.display = 'flex';
+  }
+
+  // Feature 24: Reinforcement Learning Red Agent ────────────────────
+  trainRLAgent() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    if (!nodes.length) { alert('Load a topology first.'); return; }
+
+    const btn = document.getElementById('btnTrainRL');
+    const prog = document.getElementById('rlProgress');
+    const episodes = 200;
+    if (btn) { btn.disabled = true; btn.textContent = '🤖 TRAINING...'; }
+    if (prog) prog.textContent = '0 / 200';
+
+    // Q-learning state: bitmask of first 16 nodes' compromised status
+    const nodeIds = nodes.slice(0, 16).map(n => n.id);
+    const Q = {};
+    const getState = (nds) => nds.slice(0, 16).map(n => n.status === 'compromised' ? 1 : 0).join('');
+    const getQ    = (s, a) => { if (!Q[s]) Q[s] = {}; return Q[s][a] || 0; };
+    const setQ    = (s, a, v) => { if (!Q[s]) Q[s] = {}; Q[s][a] = v; };
+    const alpha   = 0.1, gamma  = 0.9;
+    let   epsilon = 0.3;
+    let   episode = 0;
+    let   totalWins = 0;
+    const topActions = {};
+
+    const runBatch = () => {
+      const batchSize = 10;
+      for (let b = 0; b < batchSize && episode < episodes; b++, episode++) {
+        const battle = new HeadlessBattle(nodes, links);
+        const history = [];
+        let steps = 0;
+
+        while (!battle.done && steps++ < 60) {
+          const state   = getState(battle.nodes);
+          const targets = battle.nodes.filter(n => n.status !== 'compromised' && n.status !== 'isolated');
+          if (!targets.length) break;
+
+          let action;
+          if (Math.random() < epsilon) {
+            action = targets[Math.floor(Math.random() * targets.length)].id;
+          } else {
+            action = targets.reduce((best, n) => getQ(state, n.id) > getQ(state, best) ? n.id : best, targets[0].id);
+          }
+
+          const prevComp = battle.nodes.filter(n => n.status === 'compromised').length;
+          battle._stepRed && battle._stepRed();
+          battle._stepBlue && battle._stepBlue();
+          battle._checkWin && battle._checkWin();
+          const newComp = battle.nodes.filter(n => n.status === 'compromised').length;
+
+          const reward = (newComp > prevComp ? 5 : -1) + (battle.winner === 'red' ? 20 : 0);
+          const newState = getState(battle.nodes);
+          const maxNextQ = targets.reduce((m, n) => Math.max(m, getQ(newState, n.id)), -Infinity);
+          setQ(state, action, getQ(state, action) + alpha * (reward + gamma * maxNextQ - getQ(state, action)));
+          history.push(action);
+          topActions[action] = (topActions[action] || 0) + 1;
+        }
+
+        if (battle.winner === 'red' || battle.nodes.filter(n=>n.status==='compromised').length > nodes.length/2) totalWins++;
+        epsilon *= 0.995;
+      }
+
+      if (prog) prog.textContent = `${episode} / ${episodes}`;
+      if (episode < episodes) {
+        setTimeout(runBatch, 0);
+      } else {
+        const winRate = Math.round(totalWins / episodes * 100);
+        const topSeq  = Object.entries(topActions).sort((a,b)=>b[1]-a[1]).slice(0,5);
+        if (btn) { btn.disabled = false; btn.textContent = '🤖 TRAIN RL'; }
+        this._showRLResults(winRate, topSeq, Object.keys(Q).length, nodes);
+      }
+    };
+
+    setTimeout(runBatch, 0);
+  }
+
+  _showRLResults(winRate, topActions, stateCount, nodes) {
+    let modal = document.getElementById('rlResultsModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'rlResultsModal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:40000;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);';
+      modal.onclick = e => { if(e.target===modal) modal.remove(); };
+      document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+      <div style="background:linear-gradient(160deg,#0d0810,#160d1a);border:1px solid rgba(239,68,68,0.3);border-radius:12px;width:500px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="padding:14px 20px;background:rgba(239,68,68,0.07);border-bottom:1px solid rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:0.72rem;font-weight:700;color:#f87171;letter-spacing:0.12em;">🤖 RL AGENT TRAINING COMPLETE</div>
+          <button onclick="document.getElementById('rlResultsModal').remove()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-muted);padding:3px 10px;font-size:0.65rem;cursor:pointer;">✕</button>
+        </div>
+        <div style="padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:10px;text-align:center;">
+              <div style="font-size:1.4rem;font-weight:700;color:#ef4444;">${winRate}%</div>
+              <div style="font-size:0.55rem;color:var(--text-muted);">Win Rate (200 eps)</div>
+            </div>
+            <div style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);border-radius:6px;padding:10px;text-align:center;">
+              <div style="font-size:1.4rem;font-weight:700;color:#a855f7;">${stateCount}</div>
+              <div style="font-size:0.55rem;color:var(--text-muted);">States learned</div>
+            </div>
+            <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:10px;text-align:center;">
+              <div style="font-size:1.4rem;font-weight:700;color:#fbbf24;">200</div>
+              <div style="font-size:0.55rem;color:var(--text-muted);">Episodes run</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.6);letter-spacing:0.08em;margin-bottom:6px;">TOP ATTACK TARGETS (most Q-selected)</div>
+            ${topActions.map(([id,c])=>{
+              const n = nodes.find(x=>x.id===id);
+              return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <div style="width:${Math.min(120,c)}px;height:10px;background:#ef4444;opacity:0.6;border-radius:2px;"></div>
+                <span style="font-size:0.6rem;color:#e2e8f0;">${n?.name||id}</span>
+                <span style="font-size:0.55rem;color:#94a3b8;">(${c}×)</span>
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="font-size:0.62rem;color:var(--text-muted);line-height:1.6;background:rgba(255,255,255,0.03);border-radius:6px;padding:10px;">
+            <strong style="color:#94a3b8;">Q-learning config:</strong> α=0.1, γ=0.9, ε decay 0.3→${(0.3 * Math.pow(0.995, 200)).toFixed(3)}<br>
+            State space: ${Math.pow(2, Math.min(16, nodes.length))}-bit bitmask of compromised nodes.<br>
+            ${winRate > 60 ? '✅ Agent learned an effective attack policy.' : winRate > 40 ? '⚠ Moderate performance — run more episodes for better convergence.' : '❌ Low win rate — network may be very well-defended.'}
+          </div>
+        </div>
+      </div>`;
+    modal.style.display = 'flex';
   }
 }
 

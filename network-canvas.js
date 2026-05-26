@@ -7,7 +7,8 @@ class NetworkTwinCanvas {
     this.nodes = [];
     this.links = [];
     this.particles = [];
-    this.battleEffects = []; // [{nodeId, team, startTs, duration}]
+    this.battleEffects = []; // [{nodeId, team, startTs, duration, particles[], nodeX, nodeY}]
+    this.battleArcs    = []; // [{points[], startTs, duration}] — lightning bolt trails
 
     // Transform parameters
     this.scale = 1.0;
@@ -1574,92 +1575,165 @@ class NetworkTwinCanvas {
 
       ctx.restore();
     } else {
-      // DEFAULT ICS / Campus / Purdue / Blank Slate
-      // Renders a high-fidelity generic OT/ICS industrial plant blueprint layout in the background
+      // DEFAULT — Generic ICS / Campus / Purdue / Blank
+      // Full industrial plant control panel with animated elements
       ctx.save();
 
-      // Coordinates bounds
-      const rx = 910;
-      const ry = 50;
-      const rw = 80;
-      const rh = 360;
+      const rx = 905, ry = 42, rw = 90, rh = 370;
+      const cx = rx + rw / 2;
+      const now = Date.now();
+      const flowShift = (now / 45) % 24;
 
-      // Draw metallic industrial scaffolding layout
-      ctx.strokeStyle = 'rgba(48, 54, 61, 0.35)';
-      ctx.lineWidth = 2;
-      this.drawRoundedRect(rx, ry, rw, rh, 10, true, false);
+      // Main panel vessel
+      const panelGrad = ctx.createLinearGradient(rx, ry, rx + rw, ry);
+      panelGrad.addColorStop(0, 'rgba(8,13,26,0.94)');
+      panelGrad.addColorStop(0.4, 'rgba(16,24,46,0.88)');
+      panelGrad.addColorStop(1, 'rgba(8,13,26,0.94)');
+      ctx.strokeStyle = 'rgba(71,85,105,0.55)';
+      ctx.lineWidth = 2.5;
+      ctx.fillStyle = panelGrad;
+      this.drawRoundedRect(rx, ry, rw, rh, 10, true, true);
 
-      // Horizontal grid divisions representing factory layers (Field -> Control -> Supervisory)
-      const layers = [ry + 90, ry + 180, ry + 270];
-      layers.forEach(ly => {
-        ctx.beginPath();
-        ctx.moveTo(rx, ly); ctx.lineTo(rx + rw, ly);
+      // Hyperbolic cooling tower silhouette (upper section)
+      ctx.strokeStyle = 'rgba(71,85,105,0.28)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - 22, ry + 12);
+      ctx.bezierCurveTo(cx - 11, ry + 40, cx - 11, ry + 65, cx - 28, ry + 88);
+      ctx.lineTo(cx + 28, ry + 88);
+      ctx.bezierCurveTo(cx + 11, ry + 65, cx + 11, ry + 40, cx + 22, ry + 12);
+      ctx.closePath(); ctx.stroke();
+      // Animated steam puffs
+      const sp = (now / 1800) % (Math.PI * 2);
+      [[cx - 12, ry + 6, 5], [cx + 2, ry + 3, 7], [cx + 14, ry + 7, 4]].forEach(([sx, sy, sr]) => {
+        ctx.beginPath(); ctx.arc(sx, sy - 3 * Math.sin(sp + sx * 0.1), sr, 0, Math.PI * 2);
         ctx.stroke();
       });
 
-      // Label industrial plant zones
-      ctx.fillStyle = 'rgba(100, 116, 139, 0.6)';
-      ctx.font = '700 6px var(--font-sans), sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('PLANT LEVEL 3', rx + rw / 2, ry + 20);
-      ctx.fillText('PLANT LEVEL 2', rx + rw / 2, ry + 110);
-      ctx.fillText('PLANT LEVEL 1', rx + rw / 2, ry + 200);
-      ctx.fillText('PLANT LEVEL 0', rx + rw / 2, ry + 290);
-
-      // Schematic cooling tower outline watermark (Level 3/2 area)
-      ctx.strokeStyle = 'rgba(71, 85, 105, 0.18)';
+      // Horizontal zone dividers
+      ctx.strokeStyle = 'rgba(71,85,105,0.35)';
       ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      // Draw standard hyperbolic cooling tower outline
-      const tx = rx + rw / 2;
-      ctx.moveTo(tx - 20, ry + 30);
-      ctx.bezierCurveTo(tx - 12, ry + 50, tx - 12, ry + 70, tx - 24, ry + 85);
-      ctx.lineTo(tx + 24, ry + 85);
-      ctx.bezierCurveTo(tx + 12, ry + 70, tx + 12, ry + 50, tx + 20, ry + 30);
-      ctx.closePath();
-      ctx.stroke();
-
-      // Draw steam cloud puffs from top of tower (static clean aesthetic)
-      ctx.beginPath();
-      ctx.arc(tx - 8, ry + 23, 6, 0, Math.PI * 2);
-      ctx.arc(tx + 6, ry + 21, 8, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Draw background schematic generic plant pipes (flowing from cabinet nodes)
-      const genericPipes = [
-        { y: ry + 60, label: 'BUS-A' },
-        { y: ry + 150, label: 'BUS-B' },
-        { y: ry + 240, label: 'PROCESS-X' },
-        { y: ry + 330, label: 'TELEMETRY' }
-      ];
-
-      genericPipes.forEach(p => {
-        const startX = 800;
-        const endX = rx;
-
-        ctx.strokeStyle = 'rgba(48, 54, 61, 0.35)';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(startX, p.y);
-        ctx.lineTo(endX, p.y);
-        ctx.stroke();
-
-        ctx.strokeStyle = 'rgba(71, 85, 105, 0.18)';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(startX, p.y);
-        ctx.lineTo(endX, p.y);
-        ctx.stroke();
-
-        ctx.fillStyle = 'rgba(100, 116, 139, 0.45)';
-        ctx.font = '600 5px var(--font-sans), sans-serif';
-        ctx.fillText(p.label, (startX + endX) / 2, p.y - 4);
+      [ry + 95, ry + 190, ry + 280].forEach(ly => {
+        ctx.setLineDash([4, 3]); ctx.beginPath();
+        ctx.moveTo(rx + 5, ly); ctx.lineTo(rx + rw - 5, ly); ctx.stroke();
+        ctx.setLineDash([]);
       });
 
-      // Digital Twin watermark tag at the very top
-      ctx.fillStyle = 'rgba(100, 116, 139, 0.7)';
-      ctx.font = '700 8px var(--font-sans), sans-serif';
-      ctx.fillText('AETHERIS TWIN', rx + rw / 2, ry - 8);
+      // Zone labels
+      ctx.fillStyle = 'rgba(100,116,139,0.55)';
+      ctx.font = '700 5.5px var(--font-sans),sans-serif';
+      ctx.textAlign = 'center';
+      ['L3 SUPERVISORY', 'L2 CONTROL', 'L1 FIELD BUS', 'L0 PROCESS'].forEach((lbl, i) => {
+        ctx.fillText(lbl, cx, ry + 106 + i * 95);
+      });
+
+      // Circular gauges (3 gauges in mid section)
+      const gauges = [
+        { x: cx - 26, y: ry + 155, label: 'P', val: 0.62 + 0.08 * Math.sin(now / 2800), color: '#f59e0b' },
+        { x: cx,      y: ry + 155, label: 'T', val: 0.44 + 0.12 * Math.sin(now / 3500 + 1), color: '#ef4444' },
+        { x: cx + 26, y: ry + 155, label: 'F', val: 0.78 + 0.06 * Math.sin(now / 2200 + 2), color: '#10b981' },
+      ];
+      gauges.forEach(g => {
+        const gr = 10;
+        // Gauge background
+        ctx.strokeStyle = 'rgba(71,85,105,0.4)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(g.x, g.y, gr, Math.PI * 0.75, Math.PI * 2.25); ctx.stroke();
+        // Gauge fill
+        ctx.strokeStyle = g.color; ctx.lineWidth = 2.5;
+        ctx.shadowColor = g.color; ctx.shadowBlur = 5;
+        ctx.beginPath(); ctx.arc(g.x, g.y, gr, Math.PI * 0.75, Math.PI * 0.75 + g.val * Math.PI * 1.5); ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Needle
+        const needleAngle = Math.PI * 0.75 + g.val * Math.PI * 1.5;
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x + Math.cos(needleAngle) * 7, g.y + Math.sin(needleAngle) * 7);
+        ctx.stroke();
+        // Label
+        ctx.fillStyle = g.color; ctx.font = '700 5px Fira Code'; ctx.textAlign = 'center';
+        ctx.fillText(g.label, g.x, g.y + gr + 6);
+      });
+
+      // PLC / RTU status indicators (lower section)
+      const plcs = [
+        { label: 'RTU-01', active: true  },
+        { label: 'RTU-02', active: true  },
+        { label: 'PLC-A',  active: (Math.sin(now / 4000) > -0.7) },
+        { label: 'PLC-B',  active: true  },
+      ];
+      plcs.forEach((p, i) => {
+        const px = rx + 10 + (i % 2) * 38;
+        const py = ry + 295 + Math.floor(i / 2) * 18;
+        ctx.fillStyle = 'rgba(9,14,26,0.6)';
+        ctx.strokeStyle = p.active ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)';
+        ctx.lineWidth = 1;
+        this.drawRoundedRect(px, py, 32, 12, 3, true, true);
+        // LED
+        ctx.fillStyle = p.active ? '#10b981' : '#ef4444';
+        ctx.shadowColor = p.active ? '#10b981' : '#ef4444'; ctx.shadowBlur = 4;
+        ctx.beginPath(); ctx.arc(px + 7, py + 6, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#94a3b8'; ctx.font = '600 5px Fira Code'; ctx.textAlign = 'left';
+        ctx.fillText(p.label, px + 13, py + 8.5);
+      });
+
+      // Animated flow ticker
+      ctx.fillStyle = '#94a3b8'; ctx.font = '700 5.5px Fira Code'; ctx.textAlign = 'center';
+      const flowVal = (42 + 8 * Math.sin(now / 2600)).toFixed(1);
+      ctx.fillText(`FLOW: ${flowVal} L/s`, cx, ry + 348);
+      ctx.fillText(`AETHERIS PLANT`, cx, ry - 8);
+
+      // Panel header glint line
+      ctx.strokeStyle = 'rgba(100,116,139,0.2)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(rx + 10, ry + 5); ctx.lineTo(rx + rw - 10, ry + 5); ctx.stroke();
+
+      // Background SCADA pipes (from left side of canvas)
+      const defPipes = [
+        { fy: 80,  ty: ry + 55,  color: '#f59e0b', label: 'PROC STEAM',    active: true },
+        { fy: 175, ty: ry + 150, color: '#38bdf8', label: 'COOLING WATER', active: true },
+        { fy: 265, ty: ry + 245, color: '#10b981', label: 'DRAIN LINE',    active: (Math.sin(now / 5000) > 0) },
+        { fy: 360, ty: ry + 335, color: '#a78bfa', label: 'INSTRUMENT AIR',active: true },
+      ];
+      defPipes.forEach(p => {
+        const sx = 800, ex = rx;
+        // Outer casing
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty); ctx.stroke();
+        ctx.strokeStyle = '#334155'; ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty); ctx.stroke();
+        // Inner bore
+        ctx.strokeStyle = 'rgba(9,14,26,0.9)'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty); ctx.stroke();
+        // Animated flow stripe
+        if (p.active) {
+          ctx.strokeStyle = p.color; ctx.lineWidth = 2.5;
+          ctx.save(); ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty);
+          ctx.setLineDash([9, 8]); ctx.lineDashOffset = flowShift; ctx.stroke();
+          ctx.restore();
+        }
+        // Pipe label
+        ctx.fillStyle = 'rgba(100,116,139,0.6)'; ctx.font = '600 5.5px var(--font-sans),sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(p.label, (sx + ex) / 2, p.fy - 5);
+        // Flow badge
+        if (p.active) {
+          ctx.save(); ctx.font = '600 5px Fira Code'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const bval = (60 + 20 * Math.sin(now / 3000 + p.fy * 0.01)).toFixed(0) + '%';
+          const bw = ctx.measureText(bval).width + 6;
+          const bmx = (sx + ex) / 2, bmy = (p.fy + p.ty) / 2 + 6;
+          ctx.fillStyle = 'rgba(9,14,26,0.85)';
+          ctx.beginPath(); ctx.roundRect(bmx - bw / 2, bmy - 4, bw, 9, 2); ctx.fill();
+          ctx.strokeStyle = p.color; ctx.lineWidth = 0.6; ctx.stroke();
+          ctx.fillStyle = p.color; ctx.fillText(bval, bmx, bmy);
+          ctx.restore();
+        }
+        // Elbow joint circles
+        [sx, ex].forEach((jx, ji) => {
+          const jy = ji === 0 ? p.fy : p.ty;
+          ctx.strokeStyle = 'rgba(71,85,105,0.55)'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(jx, jy, 5, 0, Math.PI * 2); ctx.stroke();
+        });
+      });
 
       ctx.restore();
     }
@@ -2739,85 +2813,281 @@ class NetworkTwinCanvas {
   // ── Battle Mode Visual Effects ─────────────────────────────────────────────
 
   flashBattleEffect(nodeId, team) {
-    // Replace existing effect on same node
+    const node = this.nodes.find(n => n.id === nodeId);
+    if (!node) return;
     this.battleEffects = this.battleEffects.filter(e => e.nodeId !== nodeId);
-    this.battleEffects.push({ nodeId, team, startTs: Date.now(), duration: 1400 });
+
+    const numP = 24;
+    const particles = [];
+    if (team === 'red') {
+      for (let i = 0; i < numP; i++) {
+        const a = (i / numP) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+        const speed = 55 + Math.random() * 90;
+        particles.push({
+          a, speed,
+          r: 1.5 + Math.random() * 3.5,
+          color: ['#ef4444','#f97316','#dc2626','#b91c1c','#fbbf24','#ff6b6b'][Math.floor(Math.random()*6)],
+          lifespan: 0.45 + Math.random() * 0.5,
+          delay:    Math.random() * 0.15,
+          gravity:  18 + Math.random() * 25,
+        });
+      }
+    } else {
+      // Inward converging particles
+      for (let i = 0; i < numP; i++) {
+        const a = (i / numP) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const startR = 58 + Math.random() * 28;
+        particles.push({
+          a, startR,
+          r: 1.5 + Math.random() * 2.5,
+          color: ['#2d7dd2','#00d4ff','#60a5fa','#38bdf8','#7dd3fc'][Math.floor(Math.random()*5)],
+          lifespan: 0.5 + Math.random() * 0.4,
+          delay:    Math.random() * 0.1,
+        });
+      }
+    }
+
+    this.battleEffects.push({ nodeId, team, startTs: Date.now(), duration: 1900, particles, nodeX: node.x, nodeY: node.y });
+  }
+
+  addAttackArc(fromId, toId) {
+    const from = this.nodes.find(n => n.id === fromId);
+    const to   = this.nodes.find(n => n.id === toId);
+    if (!from || !to) return;
+    const points = this._genLightning(from.x, from.y, to.x, to.y, 4);
+    this.battleArcs.push({ points, startTs: Date.now(), duration: 900 });
+    this.flashBattleEffect(toId, 'red');
+  }
+
+  _genLightning(x1, y1, x2, y2, depth) {
+    if (depth === 0) return [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+    const perp = { x: -(y2 - y1), y: x2 - x1 };
+    const len  = Math.sqrt(perp.x * perp.x + perp.y * perp.y) || 1;
+    const disp = (Math.random() - 0.5) * len * 0.45;
+    const mx = (x1 + x2) / 2 + (perp.x / len) * disp;
+    const my = (y1 + y2) / 2 + (perp.y / len) * disp;
+    return [
+      ...this._genLightning(x1, y1, mx, my, depth - 1),
+      ...this._genLightning(mx, my, x2, y2, depth - 1).slice(1),
+    ];
   }
 
   _drawBattleEffects() {
-    if (!this.battleEffects || this.battleEffects.length === 0) return;
+    if (!this.battleEffects.length && !this.battleArcs.length) return;
     const now = Date.now();
-    const ctx = this.ctx;
+    const ctx  = this.ctx;
+
+    // Prune expired
     this.battleEffects = this.battleEffects.filter(e => now - e.startTs < e.duration);
+    this.battleArcs    = this.battleArcs.filter(a => now - a.startTs < a.duration);
 
-    for (const e of this.battleEffects) {
-      const node = this.nodes.find(n => n.id === e.nodeId);
-      if (!node) continue;
-      const t = (now - e.startTs) / e.duration; // 0→1
-      const alpha = Math.sin(t * Math.PI) * 0.85; // rises then falls
-
+    // Lightning arcs (drawn before nodes for depth)
+    for (const arc of this.battleArcs) {
+      const t = (now - arc.startTs) / arc.duration;
+      const alpha = Math.sin(t * Math.PI) * 0.9;
       ctx.save();
+      // Outer glow
+      ctx.strokeStyle = `rgba(239,68,68,${alpha * 0.35})`;
+      ctx.lineWidth = 5;
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 14;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      arc.points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+      // Core
+      ctx.strokeStyle = `rgba(255,180,180,${alpha * 0.95})`;
+      ctx.lineWidth = 1.2;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      arc.points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Node effects
+    for (const e of this.battleEffects) {
+      const t  = (now - e.startTs) / e.duration;
+      const nx = e.nodeX, ny = e.nodeY;
+      ctx.save();
+
       if (e.team === 'red') {
-        // Attack: expanding red ring + crosshair
-        const r = 22 + t * 28;
-        ctx.strokeStyle = `rgba(239,68,68,${alpha})`;
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = `rgba(239,68,68,${alpha * 0.7})`;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.stroke();
+        // ── RED ATTACK EFFECT ──────────────────────────────────────
+        const dt = e.duration / 1000; // seconds
 
-        // Second ring slightly behind
-        ctx.strokeStyle = `rgba(239,68,68,${alpha * 0.45})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r + 10, 0, Math.PI * 2);
-        ctx.stroke();
+        // 1. Initial flash burst (t < 0.12)
+        if (t < 0.12) {
+          const fa = (1 - t / 0.12);
+          ctx.fillStyle = `rgba(255,80,80,${fa * 0.55})`;
+          ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 30;
+          ctx.beginPath(); ctx.arc(nx, ny, 35 * (1 - fa * 0.3), 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+        }
 
-        // Crosshair lines
-        const len = 14;
-        ctx.strokeStyle = `rgba(239,68,68,${alpha * 0.7})`;
-        ctx.lineWidth = 1.5;
+        // 2. Particles bursting outward
+        for (const p of e.particles) {
+          const localT = (t - p.delay) / p.lifespan;
+          if (localT < 0 || localT > 1) continue;
+          const dist = p.speed * localT * dt;
+          const grav = p.gravity * (localT * dt) * (localT * dt);
+          const px = nx + Math.cos(p.a) * dist;
+          const py = ny + Math.sin(p.a) * dist + grav;
+          const pa = (1 - localT) * (1 - localT); // quadratic fade
+          ctx.globalAlpha = pa;
+          ctx.shadowColor = p.color; ctx.shadowBlur = 6;
+          ctx.fillStyle = p.color;
+          ctx.beginPath(); ctx.arc(px, py, p.r * (1 - localT * 0.4), 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+        // 3. Expanding concentric rings
+        [{ baseR: 18, speed: 55, w: 2.5, a: 0.9 }, { baseR: 12, speed: 38, w: 1.2, a: 0.55 }, { baseR: 8, speed: 22, w: 0.7, a: 0.35 }].forEach(ring => {
+          const r = ring.baseR + ring.speed * t * dt;
+          const ra = (1 - t) * ring.a;
+          ctx.strokeStyle = `rgba(239,68,68,${ra})`;
+          ctx.lineWidth = ring.w;
+          ctx.shadowColor = `rgba(239,68,68,${ra * 0.6})`; ctx.shadowBlur = 8;
+          ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2); ctx.stroke();
+        });
         ctx.shadowBlur = 0;
-        [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dy]) => {
+
+        // 4. Glitch scan lines (t 0.05–0.35)
+        if (t > 0.05 && t < 0.35) {
+          const ga = (0.35 - t) / 0.3;
+          const numLines = 5 + Math.floor(t * 12);
+          for (let i = 0; i < numLines; i++) {
+            const ly = ny - 28 + (i / numLines) * 56;
+            const lw = 18 + Math.random() * 30;
+            const lx = nx - lw / 2 + (Math.random() - 0.5) * 10;
+            ctx.fillStyle = `rgba(239,68,68,${ga * (0.08 + Math.random() * 0.12)})`;
+            ctx.fillRect(lx, ly, lw, 1 + Math.random() * 2);
+          }
+        }
+
+        // 5. Crosshair targeting reticle
+        const rSize = 22 + (1 - Math.min(1, t * 3)) * 16;
+        const ra2 = Math.max(0, 1 - t * 1.4);
+        ctx.strokeStyle = `rgba(239,68,68,${ra2 * 0.8})`;
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.arc(nx, ny, rSize, 0, Math.PI * 2); ctx.stroke();
+        [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx, dy]) => {
           ctx.beginPath();
-          ctx.moveTo(node.x + dx * (r - 5), node.y + dy * (r - 5));
-          ctx.lineTo(node.x + dx * (r + len), node.y + dy * (r + len));
+          ctx.moveTo(nx + dx * (rSize + 4), ny + dy * (rSize + 4));
+          ctx.lineTo(nx + dx * (rSize + 14), ny + dy * (rSize + 14));
           ctx.stroke();
         });
-      } else {
-        // Defend: blue shield flash + contracting ring
-        const r = 40 - t * 20;
-        ctx.strokeStyle = `rgba(45,125,210,${alpha})`;
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = `rgba(0,212,255,${alpha * 0.6})`;
-        ctx.shadowBlur = 16;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.shadowBlur = 0;
 
-        // Fill glow
-        ctx.fillStyle = `rgba(45,125,210,${alpha * 0.10})`;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Check mark
-        if (t > 0.3 && t < 0.9) {
-          const ca = alpha * 1.2;
-          ctx.strokeStyle = `rgba(34,197,94,${Math.min(1, ca)})`;
-          ctx.lineWidth = 2.5;
-          ctx.shadowColor = `rgba(34,197,94,0.6)`;
-          ctx.shadowBlur = 8;
-          ctx.beginPath();
-          ctx.moveTo(node.x - 7, node.y + 1);
-          ctx.lineTo(node.x - 1, node.y + 8);
-          ctx.lineTo(node.x + 9, node.y - 6);
-          ctx.stroke();
+        // 6. "EXPLOITED" floating text
+        if (t > 0.1 && t < 0.85) {
+          const ta = Math.sin((t - 0.1) / 0.75 * Math.PI) * 0.9;
+          const ty2 = ny - 40 - (t - 0.1) * 28;
+          ctx.globalAlpha = ta;
+          ctx.font = 'bold 8px "Fira Code", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ef4444';
+          ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 10;
+          ctx.fillText('EXPLOITED', nx, ty2);
+          ctx.shadowBlur = 0;
         }
+        ctx.globalAlpha = 1;
+
+      } else {
+        // ── BLUE DEFEND EFFECT ─────────────────────────────────────
+        const dt = e.duration / 1000;
+
+        // 1. Flash
+        if (t < 0.1) {
+          const fa = 1 - t / 0.1;
+          ctx.fillStyle = `rgba(45,125,210,${fa * 0.45})`;
+          ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 25;
+          ctx.beginPath(); ctx.arc(nx, ny, 38, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // 2. Particles converging inward
+        for (const p of e.particles) {
+          const localT = (t - p.delay) / p.lifespan;
+          if (localT < 0 || localT > 1) continue;
+          const startPx = nx + Math.cos(p.a) * p.startR;
+          const startPy = ny + Math.sin(p.a) * p.startR;
+          const px = startPx + (nx - startPx) * localT * localT; // ease in
+          const py = startPy + (ny - startPy) * localT * localT;
+          const pa = (1 - localT * 0.85);
+          ctx.globalAlpha = pa;
+          ctx.shadowColor = p.color; ctx.shadowBlur = 7;
+          ctx.fillStyle = p.color;
+          ctx.beginPath(); ctx.arc(px, py, p.r * (1 - localT * 0.5), 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+        // 3. Hexagonal shield pattern
+        if (t < 0.8) {
+          const hexAlpha = Math.sin(t / 0.8 * Math.PI) * 0.75;
+          const hexR = 42 - t * 18;
+          ctx.strokeStyle = `rgba(45,125,210,${hexAlpha})`;
+          ctx.lineWidth = 1.8;
+          ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 10;
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const ha = (i / 6) * Math.PI * 2 - Math.PI / 6;
+            i === 0 ? ctx.moveTo(nx + Math.cos(ha) * hexR, ny + Math.sin(ha) * hexR)
+                    : ctx.lineTo(nx + Math.cos(ha) * hexR, ny + Math.sin(ha) * hexR);
+          }
+          ctx.closePath(); ctx.stroke();
+          // Inner hex
+          ctx.strokeStyle = `rgba(0,212,255,${hexAlpha * 0.5})`;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const ha = (i / 6) * Math.PI * 2 - Math.PI / 6;
+            const r2 = hexR * 0.6;
+            i === 0 ? ctx.moveTo(nx + Math.cos(ha) * r2, ny + Math.sin(ha) * r2)
+                    : ctx.lineTo(nx + Math.cos(ha) * r2, ny + Math.sin(ha) * r2);
+          }
+          ctx.closePath(); ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        // 4. Contracting ring
+        const ringR = 50 - t * 30;
+        const ringA = (1 - t) * 0.8;
+        ctx.strokeStyle = `rgba(45,125,210,${ringA})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(nx, ny, Math.max(0, ringR), 0, Math.PI * 2); ctx.stroke();
+
+        // 5. Lock icon (t > 0.3)
+        if (t > 0.3 && t < 0.9) {
+          const la = Math.sin((t - 0.3) / 0.6 * Math.PI) * 0.95;
+          ctx.globalAlpha = la;
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 8;
+          // Lock body
+          ctx.beginPath(); ctx.roundRect(nx - 7, ny - 2, 14, 11, 2); ctx.stroke();
+          // Lock shackle
+          ctx.beginPath();
+          ctx.arc(nx, ny - 2, 5, Math.PI, 0);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        // 6. "CONTAINED" floating text
+        if (t > 0.12 && t < 0.88) {
+          const ta = Math.sin((t - 0.12) / 0.76 * Math.PI) * 0.9;
+          const ty2 = ny - 42 - (t - 0.12) * 22;
+          ctx.globalAlpha = ta;
+          ctx.font = 'bold 8px "Fira Code", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#22c55e';
+          ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 10;
+          ctx.fillText('CONTAINED', nx, ty2);
+          ctx.shadowBlur = 0;
+        }
+        ctx.globalAlpha = 1;
       }
-      ctx.shadowBlur = 0;
+
       ctx.restore();
     }
   }

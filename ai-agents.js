@@ -11,8 +11,9 @@ class RedTeamAgent {
     this.actionLog = [];
     this.nextAction = 0;
     this.speed = 1.0;
-    this.onAction = null; // callback(tag, msg, nodeId)
-    this.attackVector = null; // current target being pursued
+    this.onAction = null;       // callback(tag, msg, nodeId)
+    this.onAttackArc = null;    // callback(fromNodeId, toNodeId) — lightning trail
+    this.attackVector = null;   // current target being pursued
   }
 
   get nodes() { return this.app.canvas.nodes; }
@@ -142,6 +143,7 @@ class RedTeamAgent {
       `Pivoted ${viaNode?.name || viaId} → ${target.name || target.id} via ${tech}.${isOT ? ' ⚠ OT BOUNDARY CROSSED.' : ''}`,
       target.id
     );
+    if (this.onAttackArc) this.onAttackArc(viaId, target.id);
 
     const ownedCritical = [...this.foothold].map(id => this.nodes.find(n => n.id === id))
       .filter(n => n && (n.type === 'plc' || /(scada|hmi)/i.test(n.role || ''))).length;
@@ -429,6 +431,9 @@ class BattleSimulator {
     this.red.onAction = (tag, msg, nodeId) => {
       if (nodeId && this.app.canvas.flashBattleEffect) this.app.canvas.flashBattleEffect(nodeId, 'red');
       if (this.onUpdate) this.onUpdate();
+    };
+    this.red.onAttackArc = (fromId, toId) => {
+      if (this.app.canvas.addAttackArc) this.app.canvas.addAttackArc(fromId, toId);
     };
     this.blue.onAction = (tag, msg, nodeId) => {
       if (nodeId && this.app.canvas.flashBattleEffect) this.app.canvas.flashBattleEffect(nodeId, 'blue');

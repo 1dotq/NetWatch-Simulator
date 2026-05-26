@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260526P">
+  <link rel="stylesheet" href="styles.css?v=20260526R">
   <!-- Safety check for restricted WebViews (file:// scheme, private browsing) -->
   <script>
     (function() {
@@ -1548,10 +1548,11 @@
       </div>
     </div>
 
-    <!-- Tab switcher: AI Log | Multiplayer -->
+    <!-- Tab switcher: Battle | Tools | Multiplayer -->
     <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:1px;padding:6px 8px 0;background:rgba(0,0,0,0.2);">
-      <button id="battleTabLog" onclick="window.appInstance?.switchBattleTab('log')" style="flex:1;padding:7px 6px;font-size:0.62rem;font-weight:700;letter-spacing:0.07em;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-bottom:none;border-radius:4px 4px 0 0;color:#ef4444;cursor:pointer;">⚔ AI BATTLE LOG</button>
-      <button id="battleTabMp" onclick="window.appInstance?.switchBattleTab('mp')" style="flex:1;padding:7px 6px;font-size:0.62rem;font-weight:700;letter-spacing:0.07em;background:rgba(45,125,210,0.06);border:1px solid rgba(255,255,255,0.1);border-bottom:none;border-radius:4px 4px 0 0;color:var(--text-secondary);cursor:pointer;">🌐 MULTIPLAYER</button>
+      <button id="battleTabLog" onclick="window.appInstance?.switchBattleTab('log')" style="flex:1;padding:7px 4px;font-size:0.58rem;font-weight:700;letter-spacing:0.06em;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-bottom:none;border-radius:4px 4px 0 0;color:#ef4444;cursor:pointer;">⚔ BATTLE</button>
+      <button id="battleTabTools" onclick="window.appInstance?.switchBattleTab('tools')" style="flex:1;padding:7px 4px;font-size:0.58rem;font-weight:700;letter-spacing:0.06em;background:rgba(96,165,250,0.06);border:1px solid rgba(255,255,255,0.1);border-bottom:none;border-radius:4px 4px 0 0;color:var(--text-secondary);cursor:pointer;">🛠 TOOLS</button>
+      <button id="battleTabMp" onclick="window.appInstance?.switchBattleTab('mp')" style="flex:1;padding:7px 4px;font-size:0.58rem;font-weight:700;letter-spacing:0.06em;background:rgba(45,125,210,0.06);border:1px solid rgba(255,255,255,0.1);border-bottom:none;border-radius:4px 4px 0 0;color:var(--text-secondary);cursor:pointer;">🌐 MP</button>
     </div>
 
     <!-- AI Battle Log -->
@@ -1606,6 +1607,66 @@
         </div>
       </div>
     </div>
+
+    <!-- Tools Pane (F26–F50) -->
+    <div id="battleToolsPane" style="display:none;flex:1;overflow-y:auto;padding:10px 10px;">
+      <div style="font-size:0.55rem;color:#475569;margin-bottom:8px;letter-spacing:0.07em;">ANALYSIS &amp; INTELLIGENCE TOOLS</div>
+
+      <!-- Row 1: Recon -->
+      <div style="font-size:0.52rem;color:#374151;letter-spacing:0.07em;margin-bottom:4px;">RECON / SCAN</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
+        <button onclick="window.appInstance?.runCVEScan()" style="padding:6px 4px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:4px;color:#f87171;font-size:0.6rem;cursor:pointer;">🔍 CVE SCAN</button>
+        <button onclick="window.appInstance?.runPortScanSim()" style="padding:6px 4px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);border-radius:4px;color:#93c5fd;font-size:0.6rem;cursor:pointer;">🔌 PORT SCAN</button>
+        <button onclick="window.appInstance?.runProtocolFuzzer()" style="padding:6px 4px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:4px;color:#fcd34d;font-size:0.6rem;cursor:pointer;">⚡ FUZZ</button>
+        <button onclick="window.appInstance?.runIPConflictDetector()" style="padding:6px 4px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:4px;color:#fcd34d;font-size:0.6rem;cursor:pointer;">🔢 IP CHECK</button>
+      </div>
+
+      <!-- Row 2: Threat -->
+      <div style="font-size:0.52rem;color:#374151;letter-spacing:0.07em;margin-bottom:4px;">THREAT ANALYSIS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
+        <button onclick="window.appInstance?.runThreatHunt()" style="padding:6px 4px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:4px;color:#fbbf24;font-size:0.6rem;cursor:pointer;">🎯 THREAT HUNT</button>
+        <button onclick="window.appInstance?.showLateralMovementMap()" style="padding:6px 4px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:4px;color:#f87171;font-size:0.6rem;cursor:pointer;">🔀 LATERAL MAP</button>
+        <button onclick="window.appInstance?.showSupplyChainRisk()" style="padding:6px 4px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:4px;color:#c084fc;font-size:0.6rem;cursor:pointer;">⛓ SUPPLY CHAIN</button>
+        <button onclick="window.appInstance?.showDigitalForensics()" style="padding:6px 4px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:4px;color:#c084fc;font-size:0.6rem;cursor:pointer;">🔬 FORENSICS</button>
+      </div>
+
+      <!-- Row 3: Defense -->
+      <div style="font-size:0.52rem;color:#374151;letter-spacing:0.07em;margin-bottom:4px;">DEFENSE &amp; COMPLIANCE</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
+        <button onclick="window.appInstance?.showComplianceReport()" style="padding:6px 4px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:4px;color:#4ade80;font-size:0.6rem;cursor:pointer;">✅ COMPLIANCE</button>
+        <button onclick="window.appInstance?.showZeroTrustScore()" style="padding:6px 4px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.25);border-radius:4px;color:#c084fc;font-size:0.6rem;cursor:pointer;">🔒 ZERO-TRUST</button>
+        <button onclick="window.appInstance?.showHoneypotAdvisor()" style="padding:6px 4px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:4px;color:#fbbf24;font-size:0.6rem;cursor:pointer;">🍯 HONEYPOTS</button>
+        <button onclick="window.appInstance?.showPatchQueue()" style="padding:6px 4px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:4px;color:#fcd34d;font-size:0.6rem;cursor:pointer;">🩹 PATCHES</button>
+      </div>
+
+      <!-- Row 4: OT/Network -->
+      <div style="font-size:0.52rem;color:#374151;letter-spacing:0.07em;margin-bottom:4px;">OT / NETWORK</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
+        <button onclick="window.appInstance?.showOTSecurityPosture()" style="padding:6px 4px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:4px;color:#4ade80;font-size:0.6rem;cursor:pointer;">🏭 OT POSTURE</button>
+        <button onclick="window.appInstance?.showOTProtocolDecoder()" style="padding:6px 4px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:4px;color:#fcd34d;font-size:0.6rem;cursor:pointer;">📡 PROTOCOLS</button>
+        <button onclick="window.appInstance?.showAdvancedNetworkAnalysis()" style="padding:6px 4px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);border-radius:4px;color:#93c5fd;font-size:0.6rem;cursor:pointer;">📈 NET ANALYSIS</button>
+        <button onclick="window.appInstance?.captureNetworkBaseline()" style="padding:6px 4px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);border-radius:4px;color:#93c5fd;font-size:0.6rem;cursor:pointer;">📐 BASELINE</button>
+      </div>
+
+      <!-- Row 5: Reports -->
+      <div style="font-size:0.52rem;color:#374151;letter-spacing:0.07em;margin-bottom:4px;">REPORTS &amp; EXPORT</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
+        <button onclick="window.appInstance?.showRedTeamSummary()" style="padding:6px 4px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:4px;color:#f87171;font-size:0.6rem;cursor:pointer;">🔴 RED SUMMARY</button>
+        <button onclick="window.appInstance?.showBlueTeamScorecard()" style="padding:6px 4px;background:rgba(45,125,210,0.08);border:1px solid rgba(45,125,210,0.25);border-radius:4px;color:#60a5fa;font-size:0.6rem;cursor:pointer;">🔵 BLUE SCORE</button>
+        <button onclick="window.appInstance?.showExecutiveDashboard()" style="padding:6px 4px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:4px;color:#4ade80;font-size:0.6rem;cursor:pointer;">📊 EXEC DASH</button>
+        <button onclick="window.appInstance?.generateIRPlaybook()" style="padding:6px 4px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);border-radius:4px;color:#93c5fd;font-size:0.6rem;cursor:pointer;">📓 IR PLAYBOOK</button>
+      </div>
+
+      <!-- Row 6: Export -->
+      <div style="font-size:0.52rem;color:#374151;letter-spacing:0.07em;margin-bottom:4px;">EXPORT</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+        <button onclick="window.appInstance?.exportAssetCSV()" style="padding:6px 4px;background:rgba(96,165,250,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#94a3b8;font-size:0.6rem;cursor:pointer;">📋 ASSET CSV</button>
+        <button onclick="window.appInstance?.exportSIEMLogs()" style="padding:6px 4px;background:rgba(96,165,250,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#94a3b8;font-size:0.6rem;cursor:pointer;">📤 SIEM EXPORT</button>
+        <button onclick="window.appInstance?.exportMITRELayer()" style="padding:6px 4px;background:rgba(96,165,250,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#94a3b8;font-size:0.6rem;cursor:pointer;">🗺 MITRE JSON</button>
+        <button onclick="window.appInstance?.exportPCAPLog()" style="padding:6px 4px;background:rgba(96,165,250,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#94a3b8;font-size:0.6rem;cursor:pointer;">📦 PCAP LOG</button>
+        <button onclick="window.appInstance?.showBaselineDiff()" style="padding:6px 4px;background:rgba(96,165,250,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#94a3b8;font-size:0.6rem;cursor:pointer;grid-column:span 2;">🔍 DIFF VS BASELINE</button>
+      </div>
+    </div><!-- /battleToolsPane -->
 
   </div><!-- /battleModePanel -->
 
@@ -1789,16 +1850,16 @@
   </div>
 
   <!-- Simulation scripts -->
-  <script src="physics-sim.js?v=20260526P"></script>
-  <script src="network-canvas.js?v=20260526P"></script>
-  <script src="llm-service.js?v=20260526P"></script>
-  <script src="orchestrator.js?v=20260526P"></script>
-  <script src="wireshark.js?v=20260526P"></script>
-  <script src="packet-tracer.js?v=20260526P"></script>
-  <script src="inspector.js?v=20260526P"></script>
-  <script src="ai-agents.js?v=20260526P"></script>
-  <script src="evolution-engine.js?v=20260526P"></script>
-  <script src="multiplayer.js?v=20260526P"></script>
-  <script src="app.js?v=20260526P"></script>
+  <script src="physics-sim.js?v=20260526R"></script>
+  <script src="network-canvas.js?v=20260526R"></script>
+  <script src="llm-service.js?v=20260526R"></script>
+  <script src="orchestrator.js?v=20260526R"></script>
+  <script src="wireshark.js?v=20260526R"></script>
+  <script src="packet-tracer.js?v=20260526R"></script>
+  <script src="inspector.js?v=20260526R"></script>
+  <script src="ai-agents.js?v=20260526R"></script>
+  <script src="evolution-engine.js?v=20260526R"></script>
+  <script src="multiplayer.js?v=20260526R"></script>
+  <script src="app.js?v=20260526R"></script>
 </body>
 </html>

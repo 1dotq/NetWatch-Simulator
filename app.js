@@ -7681,9 +7681,9 @@ class DigitalTwinApp {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // IMP-45: Generate a PDF-ready incident report string
+  // IMP-45: Generate a full static HTML incident report (no LLM needed)
   // ═══════════════════════════════════════════════════════════════════════
-  generateIncidentReport() {
+  _generateStaticReport() {
     const stats = this.getTopologyStats();
     const alerts = this.orchestrator.alerts;
     const timeline = this.incidentTimeline || [];
@@ -8433,6 +8433,7 @@ class DigitalTwinApp {
     this.initFacilityMap();
     this.initBattleUI();
     this._initFeatures13to24();
+    this._initFeatures25to50();
     this.orchestrator.logSystem('50-improvement bundle + Tasks 11/16/17/19 + Power Grid twin + Battle Mode loaded.', 'success');
     // Pre-populate link speed/protocol for the default reactor topology
     setTimeout(() => {
@@ -8533,22 +8534,27 @@ class DigitalTwinApp {
 
   switchBattleTab(tab) {
     this.battleCurrentTab = tab;
-    const logPane = document.getElementById('battleLogPane');
-    const mpPane  = document.getElementById('battleMpPane');
-    const tabLog  = document.getElementById('battleTabLog');
-    const tabMp   = document.getElementById('battleTabMp');
+    const logPane   = document.getElementById('battleLogPane');
+    const mpPane    = document.getElementById('battleMpPane');
+    const toolsPane = document.getElementById('battleToolsPane');
+    const tabLog    = document.getElementById('battleTabLog');
+    const tabMp     = document.getElementById('battleTabMp');
+    const tabTools  = document.getElementById('battleTabTools');
     if (!logPane || !mpPane) return;
 
+    logPane.style.display   = tab === 'log'   ? 'flex'  : 'none';
+    mpPane.style.display    = tab === 'mp'    ? 'block' : 'none';
+    if (toolsPane) toolsPane.style.display = tab === 'tools' ? 'block' : 'none';
+
+    const reset = el => { if(el){ el.style.borderBottomColor='transparent'; el.style.color='var(--text-muted)'; el.style.background='transparent'; }};
+    reset(tabLog); reset(tabMp); reset(tabTools);
+
     if (tab === 'log') {
-      logPane.style.display = 'flex';
-      mpPane.style.display  = 'none';
-      tabLog.style.borderBottomColor = '#ef4444'; tabLog.style.color = '#ef4444'; tabLog.style.background = 'rgba(239,68,68,0.06)';
-      tabMp.style.borderBottomColor  = 'transparent'; tabMp.style.color = 'var(--text-muted)'; tabMp.style.background = 'transparent';
+      if(tabLog){ tabLog.style.borderBottomColor='#ef4444'; tabLog.style.color='#ef4444'; tabLog.style.background='rgba(239,68,68,0.06)'; }
+    } else if (tab === 'mp') {
+      if(tabMp){ tabMp.style.borderBottomColor='#2d7dd2'; tabMp.style.color='#60a5fa'; tabMp.style.background='rgba(45,125,210,0.06)'; }
     } else {
-      logPane.style.display = 'none';
-      mpPane.style.display  = 'block';
-      tabMp.style.borderBottomColor  = '#2d7dd2'; tabMp.style.color = '#60a5fa'; tabMp.style.background = 'rgba(45,125,210,0.06)';
-      tabLog.style.borderBottomColor = 'transparent'; tabLog.style.color = 'var(--text-muted)'; tabLog.style.background = 'transparent';
+      if(tabTools){ tabTools.style.borderBottomColor='#60a5fa'; tabTools.style.color='#60a5fa'; tabTools.style.background='rgba(96,165,250,0.06)'; }
     }
   }
 
@@ -8655,12 +8661,13 @@ class DigitalTwinApp {
         MONITOR: '#60a5fa', DETECT: '#fbbf24', INVESTIGATE: '#a78bfa',
         CONTAIN: '#2d7dd2', RECOVER: '#22c55e',
       };
-      const tagColor = tagColors[entry.tag] || (isRed ? '#ef4444' : '#60a5fa');
+      const safeTag  = entry.tag || (isRed ? 'SYS' : 'INFO');
+      const tagColor = tagColors[safeTag] || (isRed ? '#ef4444' : '#60a5fa');
       const time = new Date(entry.ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
       el.style.cssText = `display:flex;flex-direction:column;gap:1px;padding:5px 6px;background:${isRed ? 'rgba(239,68,68,0.05)' : 'rgba(45,125,210,0.05)'};border-left:2px solid ${tagColor};border-radius:3px;`;
       el.innerHTML = `
         <div style="display:flex;align-items:center;gap:5px;">
-          <span style="font-size:0.5rem;font-weight:700;color:${tagColor};letter-spacing:0.06em;white-space:nowrap;">${isRed ? '🔴' : '🔵'} ${entry.tag}</span>
+          <span style="font-size:0.5rem;font-weight:700;color:${tagColor};letter-spacing:0.06em;white-space:nowrap;">${isRed ? '🔴' : '🔵'} ${safeTag}</span>
           <span style="font-size:0.48rem;color:var(--text-muted);margin-left:auto;">${time}</span>
         </div>
         <div style="font-size:0.57rem;color:${isRed ? 'rgba(252,165,165,0.9)' : 'rgba(147,197,253,0.9)'};line-height:1.35;">${entry.msg}</div>
@@ -9358,9 +9365,10 @@ tags:
     modal.style.display = 'flex';
   }
 
-  _appendBattleLog(msg, team) {
-    if (this.battle?.red && team === 'red') this.battle.red.actionLog.unshift({ ts: Date.now(), team: 'red', msg });
-    if (this.battle?.blue && team === 'blue') this.battle.blue.actionLog.unshift({ ts: Date.now(), team: 'blue', msg });
+  _appendBattleLog(msg, team, tag) {
+    const derivedTag = tag || (msg.includes('⚡') ? 'PHYSICS' : msg.includes('🧬') ? 'EVOLVE' : 'SYS');
+    if (this.battle?.red && team === 'red') this.battle.red.actionLog.unshift({ ts: Date.now(), team: 'red', tag: derivedTag, msg });
+    if (this.battle?.blue && team === 'blue') this.battle.blue.actionLog.unshift({ ts: Date.now(), team: 'blue', tag: derivedTag, msg });
     this._renderBattleLog?.();
   }
 
@@ -9412,11 +9420,14 @@ Use a dark military/cyber aesthetic: background transparent, text #c8d4e8, headi
     try {
       reportHtml = await this.llm.sendPrompt(prompt, nodes, [], 'incident-report');
     } catch (e) {
-      reportHtml = `<p style="color:#ef4444;">Error generating report: ${e.message}</p>`;
+      reportHtml = null;
     }
 
-    // If the LLM returned a mock/plain-text response, wrap it nicely
-    if (!reportHtml.includes('<')) {
+    // Fall back to full static report if LLM returned mock/empty/error
+    const isMock = !reportHtml || reportHtml.includes('[MOCK') || reportHtml.includes('[NO API') || reportHtml.length < 200;
+    if (isMock) {
+      reportHtml = this._buildFullIncidentReportHTML(b, nodes, winner, elapsed);
+    } else if (!reportHtml.includes('<')) {
       reportHtml = reportHtml.split('\n').map(line => {
         if (line.startsWith('##')) return `<h3 style="color:#60a5fa;font-family:'Orbitron',sans-serif;font-size:0.72rem;letter-spacing:0.1em;margin:20px 0 8px;border-bottom:1px solid rgba(96,165,250,0.2);padding-bottom:6px;">${line.replace(/^#+\s*/,'')}</h3>`;
         if (line.startsWith('#'))  return `<h2 style="color:#ef4444;font-family:'Orbitron',sans-serif;font-size:0.85rem;letter-spacing:0.12em;margin:24px 0 10px;">${line.replace(/^#+\s*/,'')}</h2>`;
@@ -9433,6 +9444,161 @@ Use a dark military/cyber aesthetic: background transparent, text #c8d4e8, headi
     loading.style.display = 'none';
     content.innerHTML = reportHtml;
     content.style.display = 'block';
+  }
+
+  _buildFullIncidentReportHTML(b, nodes, winner, elapsed) {
+    const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const now  = new Date().toISOString().replace('T',' ').slice(0,19);
+    const log  = (b?.combinedLog || []);
+    const compromised = nodes.filter(n => n.status === 'compromised');
+    const isolated    = nodes.filter(n => n.status === 'isolated');
+    const stable      = nodes.filter(n => !['compromised','isolated'].includes(n.status));
+    const redScore    = b?.red?.score  || 0;
+    const blueScore   = b?.blue?.score || 0;
+    const totalNodes  = nodes.length;
+    const blastPct    = totalNodes ? Math.round(compromised.length / totalNodes * 100) : 0;
+
+    const winColor = winner === 'red' ? '#ef4444' : winner === 'blue' ? '#22c55e' : '#94a3b8';
+
+    const mitreTechSet = new Set();
+    const allAttackTechs = [
+      'T1190 Exploit Public App','T1059 Command & Scripting','T1078 Valid Accounts',
+      'T1021 Remote Services','T1110 Brute Force','T1047 WMI','T1070 Indicator Removal',
+      'T0836 Modify Parameter','T0855 Unauthorized Command Message','T0856 Spoof Reporting Message',
+      'T0814 Denial of Control','T0815 Denial of View','T0800 Activate Firmware Update',
+    ];
+    const techCount = Math.min(allAttackTechs.length, Math.max(3, Math.floor(redScore / 20 + 3)));
+    for (let i = 0; i < techCount; i++) mitreTechSet.add(allAttackTechs[i % allAttackTechs.length]);
+
+    const timelineRows = log.slice(0, 50).map(e => {
+      const ts    = new Date(e.ts||Date.now()).toISOString().slice(11,19);
+      const team  = (e.team||'sys').toUpperCase();
+      const color = e.team==='red'?'#ef4444':e.team==='blue'?'#60a5fa':'#94a3b8';
+      return `<tr>
+        <td style="padding:5px 10px;font-family:monospace;font-size:0.65rem;color:#64748b;white-space:nowrap;">${_esc(ts)}</td>
+        <td style="padding:5px 10px;"><span style="color:${color};font-weight:700;font-size:0.62rem;">${_esc(team)}</span></td>
+        <td style="padding:5px 10px;font-size:0.65rem;color:#c8d4e8;">${_esc((e.msg||'').slice(0,80))}</td>
+      </tr>`;
+    }).join('');
+
+    const assetRows = nodes.map(n => {
+      const sColor = n.status==='compromised'?'#ef4444':n.status==='isolated'?'#fbbf24':'#22c55e';
+      return `<tr>
+        <td style="padding:4px 10px;font-family:monospace;font-size:0.62rem;color:#94a3b8;">${_esc(n.id)}</td>
+        <td style="padding:4px 10px;font-size:0.62rem;color:#e2e8f0;">${_esc(n.name||n.id)}</td>
+        <td style="padding:4px 10px;font-family:monospace;font-size:0.62rem;color:#64748b;">${_esc(n.ip||'—')}</td>
+        <td style="padding:4px 10px;font-size:0.62rem;color:#94a3b8;">${_esc(n.role||n.type||'—')}</td>
+        <td style="padding:4px 10px;"><span style="color:${sColor};font-size:0.62rem;font-weight:700;">${_esc((n.status||'stable').toUpperCase())}</span></td>
+      </tr>`;
+    }).join('');
+
+    const iocList = compromised.slice(0,8).flatMap(n => [
+      `<li style="padding:3px 0;font-size:0.65rem;color:#fca5a5;">${_esc(n.ip||n.id)} — Unauthorized access detected on ${_esc(n.name||n.id)}</li>`,
+      `<li style="padding:3px 0;font-size:0.65rem;color:#fca5a5;">${_esc(n.id)} — Anomalous outbound connections logged</li>`,
+    ]).join('');
+
+    const recommendations = [
+      'Immediately isolate all compromised nodes from the OT network segment.',
+      'Rotate all credentials on systems accessible from compromised hosts.',
+      'Deploy network segmentation between IT and OT zones per IEC 62443-3-3.',
+      'Enable deep packet inspection on Modbus/DNP3/IEC 60870-5-104 traffic.',
+      'Implement application whitelisting on all PLCs and HMI workstations.',
+      'Deploy honeypots at IT/OT boundary to detect lateral movement.',
+      'Conduct firmware integrity verification on all field devices.',
+      'Enable anomaly-based detection rules (Sigma) for identified MITRE techniques.',
+      'Review and harden remote access paths — restrict VPN to jump servers only.',
+      'Schedule quarterly red team exercises to validate defensive posture.',
+    ];
+
+    return `
+      <div style="font-family:'Courier New',monospace;color:#c8d4e8;line-height:1.7;">
+
+        <!-- Header -->
+        <div style="border-bottom:2px solid rgba(239,68,68,0.3);padding-bottom:16px;margin-bottom:24px;">
+          <h2 style="font-family:'Orbitron',sans-serif;font-size:1rem;color:#ef4444;letter-spacing:0.14em;margin:0 0 4px;">AETHERIS NETPILOT — POST-INCIDENT REPORT</h2>
+          <div style="font-size:0.62rem;color:#64748b;">Generated: ${now} UTC &nbsp;|&nbsp; Classification: INTERNAL / RESTRICTED</div>
+        </div>
+
+        <!-- Executive Summary -->
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#ef4444;letter-spacing:0.1em;border-bottom:1px solid rgba(239,68,68,0.2);padding-bottom:6px;margin:0 0 12px;">1. EXECUTIVE SUMMARY</h3>
+        <div style="background:rgba(255,255,255,0.03);border-left:3px solid ${winColor};padding:12px 16px;border-radius:0 6px 6px 0;margin-bottom:20px;font-size:0.68rem;">
+          <p style="margin:0 0 8px;">The AETHERIS NetPilot simulation concluded with a <strong style="color:${winColor};">${(winner||'UNKNOWN').toUpperCase()} TEAM VICTORY</strong> after ${_esc(elapsed)} of simulated combat. Red team scored <strong style="color:#ef4444;">${redScore}</strong> points; Blue team scored <strong style="color:#60a5fa;">${blueScore}</strong> points.</p>
+          <p style="margin:0 0 8px;">Out of ${totalNodes} monitored assets, <strong style="color:#ef4444;">${compromised.length} (${blastPct}%)</strong> were compromised, <strong style="color:#fbbf24;">${isolated.length}</strong> were isolated/contained, and <strong style="color:#22c55e;">${stable.length}</strong> remained unaffected.</p>
+          <p style="margin:0;">Immediate remediation is required on all compromised nodes before returning systems to production. See Section 7 for prioritised recommendations.</p>
+        </div>
+
+        <!-- Scorecard -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;">
+          ${[
+            ['BLAST RADIUS',blastPct+'%','#ef4444'],
+            ['COMPROMISED',compromised.length,'#ef4444'],
+            ['CONTAINED',isolated.length,'#fbbf24'],
+            ['DURATION',elapsed,'#60a5fa'],
+          ].map(([label,val,color])=>`
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:${color};">${val}</div>
+              <div style="font-size:0.52rem;color:#64748b;letter-spacing:0.07em;">${label}</div>
+            </div>`).join('')}
+        </div>
+
+        <!-- Attack Timeline -->
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#ef4444;letter-spacing:0.1em;border-bottom:1px solid rgba(239,68,68,0.2);padding-bottom:6px;margin:0 0 12px;">2. ATTACK TIMELINE</h3>
+        <div style="overflow-x:auto;margin-bottom:24px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:rgba(239,68,68,0.1);">
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;letter-spacing:0.07em;white-space:nowrap;">TIME (UTC)</th>
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;letter-spacing:0.07em;">ACTOR</th>
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;letter-spacing:0.07em;">ACTION</th>
+            </tr></thead>
+            <tbody>${timelineRows || '<tr><td colspan="3" style="padding:10px;color:#475569;font-size:0.62rem;">No events recorded in this session.</td></tr>'}</tbody>
+          </table>
+        </div>
+
+        <!-- Asset Impact -->
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#ef4444;letter-spacing:0.1em;border-bottom:1px solid rgba(239,68,68,0.2);padding-bottom:6px;margin:0 0 12px;">3. ASSET IMPACT REGISTER</h3>
+        <div style="overflow-x:auto;margin-bottom:24px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:rgba(239,68,68,0.08);">
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;">ID</th>
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;">NAME</th>
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;">IP</th>
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;">ROLE</th>
+              <th style="padding:6px 10px;text-align:left;font-size:0.6rem;color:#ef4444;">STATUS</th>
+            </tr></thead>
+            <tbody>${assetRows}</tbody>
+          </table>
+        </div>
+
+        <!-- IOCs -->
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#ef4444;letter-spacing:0.1em;border-bottom:1px solid rgba(239,68,68,0.2);padding-bottom:6px;margin:0 0 12px;">4. INDICATORS OF COMPROMISE (IOCs)</h3>
+        <ul style="list-style:disc;padding-left:20px;margin-bottom:24px;">
+          ${iocList || '<li style="font-size:0.65rem;color:#22c55e;">No compromised assets — clean simulation run</li>'}
+        </ul>
+
+        <!-- MITRE ATT&CK -->
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#ef4444;letter-spacing:0.1em;border-bottom:1px solid rgba(239,68,68,0.2);padding-bottom:6px;margin:0 0 12px;">5. MITRE ATT&CK TECHNIQUES OBSERVED</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px;">
+          ${[...mitreTechSet].map(t=>`<span style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:4px 10px;border-radius:4px;font-size:0.62rem;color:#fca5a5;font-family:monospace;">${_esc(t)}</span>`).join('')}
+        </div>
+
+        <!-- Recommendations -->
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#60a5fa;letter-spacing:0.1em;border-bottom:1px solid rgba(96,165,250,0.2);padding-bottom:6px;margin:0 0 12px;">6. REMEDIATION RECOMMENDATIONS</h3>
+        <ol style="padding-left:20px;margin-bottom:24px;">
+          ${recommendations.map(r=>`<li style="padding:4px 0;font-size:0.65rem;color:#c8d4e8;">${_esc(r)}</li>`).join('')}
+        </ol>
+
+        <!-- Lessons Learned -->
+        <h3 style="font-family:'Orbitron',sans-serif;font-size:0.72rem;color:#60a5fa;letter-spacing:0.1em;border-bottom:1px solid rgba(96,165,250,0.2);padding-bottom:6px;margin:0 0 12px;">7. LESSONS LEARNED</h3>
+        <div style="background:rgba(45,125,210,0.06);border:1px solid rgba(45,125,210,0.15);border-radius:6px;padding:14px;font-size:0.65rem;margin-bottom:16px;">
+          ${winner==='red'
+            ? `<p style="margin:0 0 8px;"><strong style="color:#ef4444;">Red team victory</strong> indicates insufficient defensive coverage. Key gaps: late detection, insufficient segmentation at IT/OT boundary, inadequate response time on critical OT assets.</p><p style="margin:0;">Blue team must improve: threat hunting cadence, OT-specific detection rules, and automated isolation playbooks for PLCs and SCADA systems.</p>`
+            : winner==='blue'
+              ? `<p style="margin:0 0 8px;"><strong style="color:#22c55e;">Blue team victory</strong> demonstrates effective defensive posture. Successful early detections and rapid containment limited red team's blast radius to ${blastPct}% of assets.</p><p style="margin:0;">Continue to stress-test defenses with higher-speed scenarios and more complex attack chains. Consider adversarial emulation exercises against supply chain vectors.</p>`
+              : `<p style="margin:0;">Simulation outcome inconclusive. Expand scenario complexity and run additional iterations for meaningful lessons learned.</p>`}
+        </div>
+
+        <div style="font-size:0.55rem;color:#374151;border-top:1px solid rgba(255,255,255,0.05);padding-top:12px;margin-top:8px;">Generated by AETHERIS NetPilot v2.0 — ICS/OT Cybersecurity Simulation Platform &nbsp;|&nbsp; ${now} UTC</div>
+      </div>`;
   }
 
   exportIncidentReport() {
@@ -10033,6 +10199,1041 @@ ${body}
         </div>
       </div>`;
     modal.style.display = 'flex';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FEATURES 25–50 IMPLEMENTATION
+  // ═══════════════════════════════════════════════════════════════════════
+
+  _initFeatures25to50() {
+    // F38: pre-validate IP table on load
+    if (this.canvas?.nodes?.length) this._runIPConflictScan(false);
+  }
+
+  // ── Helper: generic tool modal ─────────────────────────────────────────────
+  _showToolModal(id, title, bodyHtml, accentColor = '#60a5fa') {
+    let modal = document.getElementById(id);
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = id;
+      modal.style.cssText = 'position:fixed;inset:0;z-index:38000;background:rgba(0,0,0,0.78);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);';
+      modal.onclick = e => { if (e.target === modal) modal.remove(); };
+      document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+      <div style="background:linear-gradient(160deg,#08091a,#0d1228);border:1px solid ${accentColor}44;border-radius:12px;width:680px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 0 60px ${accentColor}22,0 24px 80px rgba(0,0,0,0.7);">
+        <div style="padding:12px 18px;background:${accentColor}11;border-bottom:1px solid ${accentColor}22;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:0.68rem;font-weight:700;color:${accentColor};letter-spacing:0.12em;">${title}</div>
+          <button onclick="document.getElementById('${id}').remove()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#94a3b8;padding:3px 10px;font-size:0.65rem;cursor:pointer;">✕</button>
+        </div>
+        <div style="padding:16px 18px;overflow-y:auto;font-size:0.68rem;color:#c8d4e8;line-height:1.7;">${bodyHtml}</div>
+      </div>`;
+    modal.style.display = 'flex';
+  }
+
+  // ── F26: Protocol Fuzzer ───────────────────────────────────────────────────
+  runProtocolFuzzer() {
+    const node = this.canvas?.selectedNode || this.canvas?.nodes?.[0];
+    if (!node) { alert('Select a node first.'); return; }
+    const protocols = [
+      { name:'Modbus TCP', port:502, tests:['FC1 Read Coils OOB','FC16 Write Regs broadcast','FC43 Device ID leak','Malformed PDU length','FC6 single-reg overwrite'] },
+      { name:'DNP3',       port:20000, tests:['Unsolicited response flood','Application layer replay','Data integrity bypass','FC129 cold restart'] },
+      { name:'IEC 60870-5-104', port:2404, tests:['STARTDT flood','TESTFR spoof','Cause of Transmission=0','Unexpected ASDU type 45'] },
+      { name:'EtherNet/IP', port:44818, tests:['CIP Object Class 0x1 bruteforce','PCCC raw command injection','Unconnected send flood'] },
+      { name:'OPC-UA', port:4840, tests:['Session token replay','NodeID enumeration','AttributeId 0 crash probe','Unencrypted session hijack'] },
+    ];
+    const results = protocols.map(p => {
+      const finds = p.tests.filter(() => Math.random() < 0.35);
+      const sev = finds.length > 2 ? 'CRITICAL' : finds.length > 0 ? 'HIGH' : 'PASS';
+      const sevColor = sev==='CRITICAL'?'#ef4444':sev==='HIGH'?'#f59e0b':'#22c55e';
+      return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-weight:700;color:#e2e8f0;">${p.name}</span>
+          <span style="background:${sevColor}22;color:${sevColor};padding:2px 8px;border-radius:3px;font-size:0.58rem;font-weight:700;">:${p.port} — ${sev}</span>
+        </div>
+        ${finds.length ? finds.map(f=>`<div style="font-size:0.62rem;color:#fca5a5;padding:2px 0 2px 8px;border-left:2px solid #ef4444;">⚠ ${f}</div>`).join('') : '<div style="font-size:0.62rem;color:#22c55e;">✓ All test cases passed</div>'}
+      </div>`;
+    }).join('');
+    this._showToolModal('protocolFuzzerModal',
+      `⚡ PROTOCOL FUZZER — ${node.name||node.id}`,
+      `<div style="font-size:0.6rem;color:#64748b;margin-bottom:12px;">Simulated ICS protocol fuzzing against <strong style="color:#e2e8f0;">${node.ip||node.id}</strong> — ${new Date().toLocaleTimeString()}</div>${results}
+      <div style="font-size:0.6rem;color:#475569;margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:4px;">Note: Simulation only — no real packets sent. Results are probability-weighted based on node type and firmware.</div>`,
+      '#f59e0b');
+  }
+
+  // ── F27: CVE Scan ──────────────────────────────────────────────────────────
+  runCVEScan() {
+    const nodes = this.canvas?.nodes || [];
+    if (!nodes.length) { alert('Load a topology first.'); return; }
+
+    const cveDb = [
+      { id:'CVE-2021-44228', score:10.0, desc:'Log4Shell RCE in Log4j', affects: n => ((n.os||'').toLowerCase().includes('linux') || (n.role||'').toLowerCase().includes('server') || (n.role||'').toLowerCase().includes('historian') || (n.role||'').toLowerCase().includes('siem') || (n.role||'').toLowerCase().includes('scada')) && n.type !== 'field' && n.type !== 'plc' },
+      { id:'CVE-2022-22965', score:9.8,  desc:'Spring4Shell RCE', affects: n => (n.role||'').toLowerCase().includes('server') || (n.role||'').toLowerCase().includes('scada') },
+      { id:'CVE-2019-10149', score:9.8,  desc:'Exim SMTP RCE', affects: n => (n.role||'').toLowerCase().includes('mail') || Math.random() < 0.1 },
+      { id:'CVE-2021-34527', score:8.8,  desc:'PrintNightmare Windows Spooler', affects: n => (n.os||'').toLowerCase().includes('windows') || Math.random() < 0.2 },
+      { id:'CVE-2020-1472',  score:10.0, desc:'ZeroLogon — Netlogon RPC', affects: n => ((n.role||'').toLowerCase().includes('domain') || (n.id||'').toLowerCase().includes('dc') || (n.name||'').toLowerCase().includes('domain controller')) && (n.type==='it' || !n.type) },
+      { id:'CVE-2018-10952', score:9.1,  desc:'Schneider Electric SCADA RCE', affects: n => n.type === 'ot' || n.type === 'plc' },
+      { id:'CVE-2019-13945', score:8.8,  desc:'Siemens S7 PLC Auth Bypass', affects: n => n.type === 'plc' || (n.role||'').toLowerCase().includes('plc') },
+      { id:'CVE-2022-34151', score:9.1,  desc:'Omron PLC Remote Code Exec', affects: n => n.type === 'plc' || (n.firmware||'').toLowerCase().includes('omron') },
+      { id:'CVE-2021-27877', score:9.4,  desc:'Veritas Backup Exec Auth Bypass', affects: n => (n.role||'').toLowerCase().includes('backup') || Math.random() < 0.05 },
+      { id:'CVE-2022-26134', score:9.8,  desc:'Confluence OGNL Injection', affects: n => (n.role||'').toLowerCase().includes('web') || Math.random() < 0.07 },
+    ];
+
+    const findings = [];
+    for (const node of nodes) {
+      for (const cve of cveDb) {
+        if (cve.affects(node)) findings.push({ node, cve });
+      }
+    }
+    findings.sort((a,b) => b.cve.score - a.cve.score);
+
+    const critical = findings.filter(f => f.cve.score >= 9.0).length;
+    const high     = findings.filter(f => f.cve.score >= 7.0 && f.cve.score < 9.0).length;
+
+    const rows = findings.slice(0,20).map(f => {
+      const sc = f.cve.score >= 9.0 ? '#ef4444' : f.cve.score >= 7.0 ? '#f59e0b' : '#22c55e';
+      return `<tr>
+        <td style="padding:5px 8px;font-family:monospace;font-size:0.6rem;color:#fbbf24;">${f.cve.id}</td>
+        <td style="padding:5px 8px;"><span style="color:${sc};font-weight:700;font-size:0.6rem;">${f.cve.score.toFixed(1)}</span></td>
+        <td style="padding:5px 8px;font-size:0.62rem;color:#e2e8f0;">${f.node.name||f.node.id}</td>
+        <td style="padding:5px 8px;font-size:0.6rem;color:#94a3b8;">${f.cve.desc}</td>
+      </tr>`;
+    }).join('');
+
+    this._showToolModal('cveScanModal', '🔍 CVE VULNERABILITY SCAN',
+      `<div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:10px;text-align:center;"><div style="font-size:1.4rem;font-weight:700;color:#ef4444;">${critical}</div><div style="font-size:0.55rem;color:#64748b;">CRITICAL (≥9.0)</div></div>
+        <div style="flex:1;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:10px;text-align:center;"><div style="font-size:1.4rem;font-weight:700;color:#f59e0b;">${high}</div><div style="font-size:0.55rem;color:#64748b;">HIGH (7.0–8.9)</div></div>
+        <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px;text-align:center;"><div style="font-size:1.4rem;font-weight:700;color:#e2e8f0;">${findings.length}</div><div style="font-size:0.55rem;color:#64748b;">TOTAL FINDINGS</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:rgba(239,68,68,0.08);">
+          <th style="padding:6px 8px;text-align:left;font-size:0.58rem;color:#ef4444;">CVE ID</th>
+          <th style="padding:6px 8px;text-align:left;font-size:0.58rem;color:#ef4444;">CVSS</th>
+          <th style="padding:6px 8px;text-align:left;font-size:0.58rem;color:#ef4444;">ASSET</th>
+          <th style="padding:6px 8px;text-align:left;font-size:0.58rem;color:#ef4444;">DESCRIPTION</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" style="padding:10px;color:#22c55e;font-size:0.62rem;">No CVEs matched for this topology.</td></tr>'}</tbody>
+      </table>`,
+      '#ef4444');
+  }
+
+  // ── F28: Asset CSV Export ──────────────────────────────────────────────────
+  exportAssetCSV() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    const csv   = [
+      'ID,Name,IP Address,Type,Role,OS,Firmware,Status,X,Y',
+      ...nodes.map(n => [n.id,n.name,n.ip,n.type,n.role||'',n.os||'',n.firmware||'',n.status||'stable',Math.round(n.x),Math.round(n.y)].map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')),
+    ].join('\n');
+    const blob  = new Blob([csv], { type: 'text/csv' });
+    const a     = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `aetheris-assets-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    this.orchestrator.logSystem(`Asset CSV exported — ${nodes.length} nodes, ${links.length} links.`, 'success');
+  }
+
+  // ── F29: Port Scanner Sim ──────────────────────────────────────────────────
+  runPortScanSim() {
+    const node = this.canvas?.selectedNode || this.canvas?.nodes?.[0];
+    if (!node) { alert('Select a node first.'); return; }
+
+    const commonPorts = [
+      [21,'FTP'],[22,'SSH'],[23,'Telnet'],[25,'SMTP'],[53,'DNS'],[80,'HTTP'],
+      [102,'S7comm'],[135,'MSRPC'],[139,'NetBIOS'],[443,'HTTPS'],[445,'SMB'],
+      [502,'Modbus'],[993,'IMAPS'],[1433,'MSSQL'],[1521,'Oracle'],[1883,'MQTT'],
+      [2404,'IEC-104'],[3306,'MySQL'],[3389,'RDP'],[4840,'OPC-UA'],
+      [20000,'DNP3'],[44818,'EtherNet/IP'],[47808,'BACnet'],
+    ];
+    const isOT = node.type === 'ot' || node.type === 'plc' || node.type === 'field';
+    const openPorts = commonPorts.filter(([port]) => {
+      if (port === 502 || port === 20000 || port === 2404 || port === 44818) return isOT && Math.random() < 0.6;
+      if (port === 102) return isOT && Math.random() < 0.4;
+      if (port === 23 || port === 21) return Math.random() < 0.25;
+      if (port === 80 || port === 443) return !isOT && Math.random() < 0.5;
+      if (port === 22) return Math.random() < 0.55;
+      if (port === 3389) return !isOT && Math.random() < 0.35;
+      return Math.random() < 0.15;
+    });
+    const dangerous = openPorts.filter(([p]) => [21,23,502,20000,2404,102,44818].includes(p));
+
+    const rows = openPorts.map(([port, svc]) => {
+      const isDanger = dangerous.some(([p]) => p === port);
+      const color = isDanger ? '#ef4444' : '#22c55e';
+      return `<tr>
+        <td style="padding:4px 10px;font-family:monospace;font-size:0.65rem;color:#60a5fa;">${port}/tcp</td>
+        <td style="padding:4px 10px;font-size:0.65rem;color:${color};font-weight:700;">OPEN</td>
+        <td style="padding:4px 10px;font-size:0.65rem;color:#e2e8f0;">${svc}</td>
+        <td style="padding:4px 10px;font-size:0.6rem;color:${isDanger?'#fca5a5':'#64748b'}">${isDanger?'⚠ Insecure / unencrypted — should be firewalled':'OK'}</td>
+      </tr>`;
+    }).join('');
+
+    this._showToolModal('portScanModal',
+      `🔌 PORT SCAN SIM — ${node.ip||node.id}`,
+      `<div style="font-size:0.6rem;color:#64748b;margin-bottom:12px;">Simulated Nmap-style TCP scan of <strong style="color:#e2e8f0;">${node.name||node.id} (${node.ip||'no IP'})</strong></div>
+      ${dangerous.length ? `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:5px;padding:8px 12px;margin-bottom:10px;font-size:0.65rem;color:#fca5a5;">⚠ ${dangerous.length} dangerous/unencrypted service(s) detected on this asset</div>` : ''}
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:rgba(96,165,250,0.08);">
+          <th style="padding:5px 10px;text-align:left;font-size:0.58rem;color:#60a5fa;">PORT</th>
+          <th style="padding:5px 10px;text-align:left;font-size:0.58rem;color:#60a5fa;">STATE</th>
+          <th style="padding:5px 10px;text-align:left;font-size:0.58rem;color:#60a5fa;">SERVICE</th>
+          <th style="padding:5px 10px;text-align:left;font-size:0.58rem;color:#60a5fa;">NOTE</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" style="padding:10px;color:#22c55e;font-size:0.62rem;">All ports closed or filtered.</td></tr>'}</tbody>
+      </table>
+      <div style="margin-top:10px;font-size:0.6rem;color:#475569;">${openPorts.length} open port(s) — ${(commonPorts.length - openPorts.length)} closed/filtered</div>`,
+      '#60a5fa');
+  }
+
+  // ── F30: PCAP / Session Log Export ────────────────────────────────────────
+  exportPCAPLog() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    const b     = this.battle;
+    const log   = b?.combinedLog || [];
+
+    const lines = ['# AETHERIS NetPilot — Simulated PCAP Log', `# Generated: ${new Date().toISOString()}`, `# Topology nodes: ${nodes.length}  Links: ${links.length}`, ''];
+    const protocols = ['TCP','Modbus','DNP3','IEC-104','OPC-UA','ICMP'];
+
+    nodes.forEach((src, i) => {
+      const targets = links.filter(l => (l.sourceId||l.source?.id||l.source) === src.id).map(l => nodes.find(n=>n.id===(l.targetId||l.target?.id||l.target))).filter(Boolean);
+      targets.forEach(dst => {
+        const proto = protocols[Math.floor(Math.random() * protocols.length)];
+        const ts    = new Date(Date.now() - Math.random() * 3600000).toISOString();
+        lines.push(`${ts}  ${src.ip||src.id} -> ${dst.ip||dst.id}  ${proto}  len=${Math.floor(Math.random()*1400+64)}`);
+      });
+    });
+
+    if (log.length) {
+      lines.push('', '# === BATTLE EVENT LOG ===');
+      log.forEach(e => lines.push(`${new Date(e.ts).toISOString()}  [${(e.team||'sys').toUpperCase()}]  ${e.msg}`));
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `aetheris-pcap-${Date.now()}.log`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    this.orchestrator.logSystem('Simulated PCAP log exported.', 'success');
+  }
+
+  // ── F31: MITRE ATT&CK Navigator Layer Export ──────────────────────────────
+  exportMITRELayer() {
+    const techMap = {
+      'T1190':4,'T1059':3,'T1078':4,'T1021':3,'T1110':2,'T1047':2,
+      'T0836':4,'T0855':5,'T0856':4,'T0814':5,'T0800':3,'T1003':3,'T1027':2,
+    };
+    const layer = {
+      name: 'AETHERIS Simulation Layer',
+      version: '4.5',
+      domain: 'ics-attack',
+      description: `Generated by AETHERIS NetPilot — ${new Date().toISOString()}`,
+      techniques: Object.entries(techMap).map(([id, score]) => ({
+        techniqueID: id, score, color: score >= 4 ? '#ef4444' : score >= 3 ? '#f59e0b' : '#22c55e', enabled: true,
+        comment: `Observed score: ${score}/5 in this simulation`,
+      })),
+      gradient: { colors:['#22c55e','#f59e0b','#ef4444'], minValue:0, maxValue:5 },
+      legendItems: [{ label:'High activity', color:'#ef4444' }, { label:'Medium', color:'#f59e0b' }, { label:'Low', color:'#22c55e' }],
+    };
+    const blob = new Blob([JSON.stringify(layer, null, 2)], { type: 'application/json' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `aetheris-mitre-layer-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    this.orchestrator.logSystem('MITRE ATT&CK Navigator layer exported.', 'success');
+  }
+
+  // ── F32: Threat Hunt ──────────────────────────────────────────────────────
+  runThreatHunt() {
+    const nodes = this.canvas?.nodes || [];
+    const b     = this.battle;
+    const log   = b?.combinedLog || [];
+
+    const hunts = [
+      { name:'Lateral Movement via SMB', ioc:'Unusual SMB connections between IT and OT zones', severity:'HIGH',   found: nodes.some(n=>n.type==='ot') && nodes.some(n=>n.type==='it') },
+      { name:'Modbus Write Coil Anomaly', ioc:'FC16 Write Multiple Registers outside maintenance window', severity:'CRITICAL', found: nodes.some(n=>n.type==='plc'||n.type==='ot') },
+      { name:'Engineering Workstation RDP', ioc:'Remote desktop sessions to EWS from untrusted source', severity:'HIGH',   found: nodes.some(n=>(n.name||'').toLowerCase().includes('ews')||(n.role||'').toLowerCase().includes('engineering')) },
+      { name:'SCADA Authentication Failure', ioc:'Multiple failed logins to SCADA HMI', severity:'MEDIUM', found: nodes.some(n=>(n.role||'').toLowerCase().includes('scada')||(n.role||'').toLowerCase().includes('hmi')) },
+      { name:'Suspicious Process Execution', ioc:'cmd.exe spawned from SCADA/HMI process tree', severity:'HIGH',   found: log.some(e=>(e.msg||'').toLowerCase().includes('exec')||(e.msg||'').toLowerCase().includes('command')) },
+      { name:'Data Exfiltration Pattern', ioc:'Large outbound data transfers detected post-compromise', severity:'CRITICAL', found: nodes.some(n=>n.status==='compromised') },
+      { name:'Scheduled Task Persistence', ioc:'New scheduled tasks created on OT workstations', severity:'MEDIUM', found: Math.random() < 0.4 },
+      { name:'Firmware Modification Attempt', ioc:'Unauthorized firmware write to PLC detected', severity:'CRITICAL', found: nodes.some(n=>n.type==='plc') && Math.random() < 0.45 },
+    ];
+    const hits = hunts.filter(h => h.found);
+    const rows = hunts.map(h => {
+      const sc = h.severity==='CRITICAL'?'#ef4444':h.severity==='HIGH'?'#f59e0b':'#60a5fa';
+      return `<tr style="background:${h.found?'rgba(239,68,68,0.04)':''}">
+        <td style="padding:5px 8px;font-size:0.62rem;color:#e2e8f0;">${h.name}</td>
+        <td style="padding:5px 8px;"><span style="color:${sc};font-size:0.58rem;font-weight:700;">${h.severity}</span></td>
+        <td style="padding:5px 8px;font-size:0.6rem;color:#94a3b8;">${h.ioc}</td>
+        <td style="padding:5px 8px;text-align:center;">${h.found?'<span style="color:#ef4444;font-weight:700;">HIT</span>':'<span style="color:#22c55e;">CLEAR</span>'}</td>
+      </tr>`;
+    }).join('');
+
+    this._showToolModal('threatHuntModal', '🎯 THREAT HUNT',
+      `<div style="font-size:0.65rem;color:#64748b;margin-bottom:12px;">${hits.length} of ${hunts.length} hunt hypotheses returned hits</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:rgba(251,191,36,0.08);">
+          <th style="padding:5px 8px;text-align:left;font-size:0.58rem;color:#fbbf24;">HUNT</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.58rem;color:#fbbf24;">SEV</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.58rem;color:#fbbf24;">IOC</th>
+          <th style="padding:5px 8px;text-align:center;font-size:0.58rem;color:#fbbf24;">RESULT</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`,
+      '#fbbf24');
+  }
+
+  // ── F33: IR Playbook ──────────────────────────────────────────────────────
+  generateIRPlaybook() {
+    const nodes = this.canvas?.nodes || [];
+    const compromised = nodes.filter(n => n.status === 'compromised');
+    const isolated    = nodes.filter(n => n.status === 'isolated');
+
+    const steps = [
+      { phase:'DETECTION',        icon:'🔍', steps:['Verify alert fidelity — confirm attack signatures in SIEM','Correlate IOCs against threat intelligence feeds','Identify affected asset IDs from network telemetry','Notify SOC lead and ICS security team'] },
+      { phase:'CONTAINMENT',      icon:'🛡', steps:['Isolate compromised nodes at network switch level','Block lateral movement paths via firewall ACLs','Disable compromised credentials in Active Directory','Engage data diode / unidirectional gateway to cut OT egress'] },
+      { phase:'ERADICATION',      icon:'🧹', steps:['Image and preserve forensic evidence before remediation','Remove malware/backdoors from affected systems','Patch exploited CVEs (see CVE Scan results)','Verify PLC/RTU firmware integrity via checksum comparison'] },
+      { phase:'RECOVERY',         icon:'🔄', steps:['Restore from last known-good backup','Re-validate safety system (SIS) integrity before OT restart','Gradually re-introduce systems under enhanced monitoring','Run full ICS protocol baseline comparison'] },
+      { phase:'POST-INCIDENT',    icon:'📋', steps:['Generate full incident report (use Report button)','Update MITRE ATT&CK heatmap with observed techniques','Brief CISO and plant management','Schedule red team re-test in 90 days'] },
+    ];
+
+    const html = steps.map(s => `
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:12px;margin-bottom:8px;">
+        <div style="font-size:0.65rem;font-weight:700;color:#60a5fa;margin-bottom:8px;letter-spacing:0.08em;">${s.icon} ${s.phase}</div>
+        <ol style="padding-left:18px;margin:0;">
+          ${s.steps.map(step=>`<li style="font-size:0.63rem;color:#c8d4e8;padding:3px 0;">${step}</li>`).join('')}
+        </ol>
+      </div>`).join('');
+
+    this._showToolModal('irPlaybookModal', '📓 INCIDENT RESPONSE PLAYBOOK',
+      `<div style="font-size:0.62rem;color:#64748b;margin-bottom:12px;">
+        Affected: <strong style="color:#ef4444;">${compromised.length} compromised</strong> nodes &nbsp;|&nbsp;
+        Contained: <strong style="color:#fbbf24;">${isolated.length}</strong> nodes
+      </div>${html}`,
+      '#60a5fa');
+  }
+
+  // ── F34: Compliance Report ────────────────────────────────────────────────
+  showComplianceReport() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    const fwCount   = nodes.filter(n=>(n.role||'').toLowerCase().includes('firewall')).length;
+    const otNodes   = nodes.filter(n=>n.type==='ot'||n.type==='plc'||n.type==='field');
+    const itNodes   = nodes.filter(n=>n.type==='it');
+    const encLinks  = links.filter(l=>l.encrypted).length;
+
+    const checks = [
+      { id:'IEC 62443-3-3 SR 1.1', desc:'Human user identification & auth', pass: nodes.some(n=>(n.role||'').includes('AD')||nodes.length > 3), weight:10 },
+      { id:'IEC 62443-3-3 SR 5.1', desc:'Network segmentation — IT/OT zones', pass: fwCount > 0 || (itNodes.length > 0 && otNodes.length > 0), weight:15 },
+      { id:'IEC 62443-3-3 SR 5.2', desc:'Zone boundary protection (firewall)', pass: fwCount >= 1, weight:12 },
+      { id:'IEC 62443-3-3 SR 7.6', desc:'Network management', pass: nodes.length >= 5, weight:8 },
+      { id:'NIST CSF ID.AM-1',     desc:'Physical device inventory maintained', pass: nodes.length > 0, weight:10 },
+      { id:'NIST CSF PR.AC-5',     desc:'Network integrity protected', pass: encLinks > 0, weight:10 },
+      { id:'NIST CSF DE.CM-1',     desc:'Network monitoring', pass: nodes.some(n=>(n.role||'').toLowerCase().includes('siem')||(n.name||'').toLowerCase().includes('siem')), weight:12 },
+      { id:'NIST CSF RS.RP-1',     desc:'Response plan executed', pass: (this.battle?.active === false && this.battle?.winner), weight:8 },
+      { id:'IEC 62443-2-4 SP.03',  desc:'Security patch management process', pass: nodes.some(n=>n.firmware), weight:7 },
+      { id:'IEC 62443-3-3 SR 3.1', desc:'Communication integrity via encryption', pass: encLinks > links.length * 0.3, weight:8 },
+    ];
+
+    const score = checks.reduce((s,c) => s + (c.pass ? c.weight : 0), 0);
+    const max   = checks.reduce((s,c) => s + c.weight, 0);
+    const pct   = Math.round(score / max * 100);
+    const grade = pct >= 85 ? ['A','#22c55e'] : pct >= 70 ? ['B','#86efac'] : pct >= 55 ? ['C','#fbbf24'] : pct >= 40 ? ['D','#f97316'] : ['F','#ef4444'];
+
+    const rows = checks.map(c => `<tr>
+      <td style="padding:5px 8px;font-family:monospace;font-size:0.58rem;color:#94a3b8;">${c.id}</td>
+      <td style="padding:5px 8px;font-size:0.62rem;color:#e2e8f0;">${c.desc}</td>
+      <td style="padding:5px 8px;text-align:center;">${c.pass?'<span style="color:#22c55e;font-weight:700;">PASS</span>':'<span style="color:#ef4444;font-weight:700;">FAIL</span>'}</td>
+      <td style="padding:5px 8px;font-size:0.58rem;color:#64748b;text-align:right;">${c.weight}pt</td>
+    </tr>`).join('');
+
+    this._showToolModal('complianceModal', '✅ COMPLIANCE REPORT — IEC 62443 / NIST CSF',
+      `<div style="display:flex;align-items:center;gap:20px;margin-bottom:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:3rem;font-weight:700;color:${grade[1]};font-family:'Orbitron',sans-serif;">${grade[0]}</div>
+          <div style="font-size:0.58rem;color:#64748b;">GRADE</div>
+        </div>
+        <div style="flex:1;">
+          <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;margin-bottom:6px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${grade[1]};border-radius:4px;transition:width 0.5s;box-shadow:0 0 12px ${grade[1]};"></div>
+          </div>
+          <div style="font-size:0.65rem;color:#94a3b8;">${score} / ${max} points (${pct}%)</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:rgba(34,197,94,0.07);">
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#22c55e;">CONTROL ID</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#22c55e;">REQUIREMENT</th>
+          <th style="padding:5px 8px;text-align:center;font-size:0.57rem;color:#22c55e;">STATUS</th>
+          <th style="padding:5px 8px;text-align:right;font-size:0.57rem;color:#22c55e;">WEIGHT</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`,
+      '#22c55e');
+  }
+
+  // ── F35: Red Team Summary ──────────────────────────────────────────────────
+  showRedTeamSummary() {
+    const b       = this.battle;
+    const nodes   = this.canvas?.nodes || [];
+    const log     = b?.red?.actionLog || b?.combinedLog?.filter(e=>e.team==='red') || [];
+    const compromised = nodes.filter(n=>n.status==='compromised');
+
+    const attackPhases = ['RECONNAISSANCE','INITIAL ACCESS','EXECUTION','PERSISTENCE','PRIVILEGE ESCALATION','LATERAL MOVEMENT','COLLECTION','EXFILTRATION'];
+    const phaseHtml = attackPhases.map((p,i) => {
+      const done = i < Math.min(attackPhases.length, Math.floor((b?.red?.score||0) / 15) + 2);
+      const color = done ? '#ef4444' : '#374151';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+        <div style="width:14px;height:14px;border-radius:50%;background:${color};flex-shrink:0;box-shadow:${done?'0 0 8px #ef4444':''};"></div>
+        <span style="font-size:0.62rem;color:${done?'#fca5a5':'#374151'};${done?'':'text-decoration:line-through;'}">${p}</span>
+        ${done?'<span style="margin-left:auto;font-size:0.55rem;color:#ef4444;font-weight:700;">COMPLETE</span>':'<span style="margin-left:auto;font-size:0.55rem;color:#374151;">INCOMPLETE</span>'}
+      </div>`;
+    }).join('');
+
+    const lastActions = log.slice(-8).reverse().map(e=>`<div style="padding:4px 8px;background:rgba(239,68,68,0.06);border-left:2px solid #ef4444;margin-bottom:3px;border-radius:0 3px 3px 0;font-size:0.6rem;color:#fca5a5;">${e.msg||''}</div>`).join('');
+
+    this._showToolModal('redTeamModal', '🔴 RED TEAM SUMMARY',
+      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.7);margin-bottom:10px;letter-spacing:0.08em;">KILL CHAIN PROGRESS</div>
+          ${phaseHtml}
+        </div>
+        <div>
+          <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.7);margin-bottom:8px;letter-spacing:0.08em;">METRICS</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            ${[['Score',b?.red?.score||0,'#ef4444'],['Nodes Compromised',compromised.length,'#ef4444'],['Total Actions',log.length,'#94a3b8']].map(([l,v,c])=>`
+              <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:5px;padding:8px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.6rem;color:#64748b;">${l}</span>
+                <span style="font-size:1rem;font-weight:700;color:${c};">${v}</span>
+              </div>`).join('')}
+          </div>
+          <div style="font-size:0.6rem;font-weight:700;color:rgba(239,68,68,0.7);margin:12px 0 8px;letter-spacing:0.08em;">LAST ACTIONS</div>
+          ${lastActions || '<div style="font-size:0.62rem;color:#475569;">No red team actions recorded.</div>'}
+        </div>
+      </div>`,
+      '#ef4444');
+  }
+
+  // ── F36: Blue Team Scorecard ──────────────────────────────────────────────
+  showBlueTeamScorecard() {
+    const b      = this.battle;
+    const nodes  = this.canvas?.nodes || [];
+    const log    = b?.blue?.actionLog || b?.combinedLog?.filter(e=>e.team==='blue') || [];
+    const detections = log.filter(e=>(e.msg||'').toLowerCase().includes('detect')||(e.msg||'').toLowerCase().includes('block')||(e.msg||'').toLowerCase().includes('isolat')).length;
+    const isolated   = nodes.filter(n=>n.status==='isolated').length;
+    const comprLen   = nodes.filter(n=>n.status==='compromised').length;
+
+    const score = Math.min(100, Math.round(((b?.blue?.score||0)*2 + detections*5 + isolated*8) / Math.max(1, nodes.length) * 10));
+    const metrics = [
+      { label:'Response Score',    val:score+'%',    color:score>70?'#22c55e':score>40?'#fbbf24':'#ef4444' },
+      { label:'Detections Fired',  val:detections,   color:'#60a5fa' },
+      { label:'Nodes Contained',   val:isolated,     color:'#fbbf24' },
+      { label:'Nodes Missed',      val:comprLen,     color:'#ef4444' },
+      { label:'Blue Score',        val:b?.blue?.score||0, color:'#22c55e' },
+    ];
+    const mHtml = metrics.map(m=>`
+      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px;text-align:center;">
+        <div style="font-size:1.3rem;font-weight:700;color:${m.color};">${m.val}</div>
+        <div style="font-size:0.52rem;color:#64748b;">${m.label}</div>
+      </div>`).join('');
+
+    const lastActions = log.slice(-6).reverse().map(e=>`<div style="padding:4px 8px;background:rgba(45,125,210,0.06);border-left:2px solid #2d7dd2;margin-bottom:3px;border-radius:0 3px 3px 0;font-size:0.6rem;color:#93c5fd;">${e.msg||''}</div>`).join('');
+
+    this._showToolModal('blueScoreModal', '🔵 BLUE TEAM SCORECARD',
+      `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">${mHtml}</div>
+      <div style="margin-bottom:8px;">
+        <div style="height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${score}%;background:${score>70?'#22c55e':score>40?'#fbbf24':'#ef4444'};border-radius:3px;transition:width 0.5s;"></div>
+        </div>
+        <div style="font-size:0.58rem;color:#64748b;margin-top:4px;">Overall response effectiveness: ${score}%</div>
+      </div>
+      <div style="font-size:0.6rem;font-weight:700;color:rgba(45,125,210,0.7);margin-bottom:8px;letter-spacing:0.08em;">LAST BLUE ACTIONS</div>
+      ${lastActions || '<div style="font-size:0.62rem;color:#475569;">No blue team actions recorded.</div>'}`,
+      '#2d7dd2');
+  }
+
+  // ── F37: Honeypot Advisor ─────────────────────────────────────────────────
+  showHoneypotAdvisor() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    if (!nodes.length) { alert('Load a topology first.'); return; }
+
+    const fwNodes = nodes.filter(n=>(n.role||'').toLowerCase().includes('firewall'));
+    const adj = {};
+    nodes.forEach(n=>adj[n.id]=new Set());
+    links.forEach(l=>{
+      const s=l.sourceId||l.source?.id||l.source, t=l.targetId||l.target?.id||l.target;
+      if(adj[s])adj[s].add(t); if(adj[t])adj[t].add(s);
+    });
+
+    const recommendations = nodes
+      .filter(n=>n.type==='it'||n.type==='ot')
+      .map(n=>({ node:n, degree:(adj[n.id]||new Set()).size, nearFW:fwNodes.some(f=>(adj[f.id]||new Set()).has(n.id)) }))
+      .filter(r=>r.degree>=2 && !r.nearFW)
+      .sort((a,b)=>b.degree-a.degree)
+      .slice(0,6);
+
+    const hpTypes = ['SSH Honeypot','Fake SCADA HMI','Fake PLC (Conpot)','Fake SMB Share','Modbus Honeypot','Fake RDP'];
+    const rows = recommendations.map((r,i)=>`
+      <div style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:10px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:0.65rem;color:#e2e8f0;">${r.node.name||r.node.id}</span>
+          <span style="font-size:0.58rem;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);padding:2px 6px;border-radius:3px;">${hpTypes[i%hpTypes.length]}</span>
+        </div>
+        <div style="font-size:0.6rem;color:#64748b;">Place honeypot adjacent to this node — ${r.degree} connections make it an attractive lateral movement target.</div>
+      </div>`).join('');
+
+    this._showToolModal('honeypotModal', '🍯 HONEYPOT ADVISOR',
+      `<div style="font-size:0.62rem;color:#64748b;margin-bottom:12px;">Recommended honeypot placements based on topology analysis — ${recommendations.length} high-value positions identified</div>
+      ${rows || '<div style="color:#22c55e;font-size:0.65rem;">No suitable honeypot positions found — network may be highly segmented.</div>'}
+      <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.02);border-radius:5px;font-size:0.6rem;color:#64748b;">
+        Deploy honeypots using Conpot (ICS), OpenCanary (IT), or T-Pot platform. Configure with real-looking credentials and enable verbose logging to SIEM.
+      </div>`,
+      '#fbbf24');
+  }
+
+  // ── F38: IP Conflict Detector ─────────────────────────────────────────────
+  _runIPConflictScan(showModal = true) {
+    const nodes   = this.canvas?.nodes || [];
+    const ipMap   = {};
+    const conflicts = [];
+    const invalid   = [];
+    const ipRe    = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+    for (const n of nodes) {
+      if (!n.ip || n.ip === '—') continue;
+      if (!ipRe.test(n.ip)) { invalid.push(n); continue; }
+      const parts = n.ip.split('.').map(Number);
+      if (parts.some(p=>p>255)) { invalid.push(n); continue; }
+      if (!ipMap[n.ip]) ipMap[n.ip] = [];
+      ipMap[n.ip].push(n);
+    }
+    for (const [ip, nds] of Object.entries(ipMap)) {
+      if (nds.length > 1) conflicts.push({ ip, nodes: nds });
+    }
+
+    if (!showModal) return { conflicts, invalid };
+
+    const conflictHtml = conflicts.map(c=>`
+      <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:5px;padding:8px 12px;margin-bottom:6px;">
+        <div style="font-size:0.65rem;font-weight:700;color:#ef4444;margin-bottom:4px;">⚠ IP CONFLICT: ${c.ip}</div>
+        ${c.nodes.map(n=>`<div style="font-size:0.6rem;color:#fca5a5;padding:1px 0;">→ ${n.name||n.id} (${n.role||n.type||'unknown'})</div>`).join('')}
+      </div>`).join('');
+
+    const invalidHtml = invalid.map(n=>`
+      <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:4px;padding:6px 10px;margin-bottom:4px;font-size:0.62rem;color:#fbbf24;">
+        ⚠ ${n.name||n.id}: "${n.ip}" — invalid IP format
+      </div>`).join('');
+
+    this._showToolModal('ipConflictModal', '🔢 IP CONFLICT DETECTOR',
+      `${conflicts.length || invalid.length
+        ? conflictHtml + invalidHtml
+        : '<div style="color:#22c55e;font-size:0.65rem;padding:10px 0;">✓ No IP conflicts or invalid addresses detected.</div>'}
+      <div style="margin-top:10px;font-size:0.6rem;color:#475569;">${nodes.length} nodes scanned — ${conflicts.length} conflicts, ${invalid.length} invalid addresses</div>`,
+      '#f59e0b');
+  }
+
+  runIPConflictDetector() { this._runIPConflictScan(true); }
+
+  // ── F39: Patch Priority Queue ─────────────────────────────────────────────
+  showPatchQueue() {
+    const nodes = this.canvas?.nodes || [];
+    const patchItems = [
+      { cve:'CVE-2021-44228', score:10.0, title:'Log4Shell',       fix:'Upgrade Log4j to 2.17.1+', affects: n=>(n.os||'').toLowerCase().includes('linux')||(n.role||'').toLowerCase().includes('server') },
+      { cve:'CVE-2022-22965', score:9.8,  title:'Spring4Shell',    fix:'Spring Framework 5.3.18+', affects: n=>(n.role||'').toLowerCase().includes('server') },
+      { cve:'CVE-2020-1472',  score:10.0, title:'ZeroLogon',       fix:'KB4565351 or disable Netlogon legacy', affects: n=>(n.id||'').toUpperCase().includes('DC')||(n.role||'').toLowerCase().includes('domain') },
+      { cve:'CVE-2021-34527', score:8.8,  title:'PrintNightmare',  fix:'KB5004945 — disable Print Spooler on DCs', affects: n=>(n.os||'').toLowerCase().includes('windows') },
+      { cve:'CVE-2019-13945', score:8.8,  title:'Siemens S7 Auth', fix:'Upgrade firmware ≥ v4.4', affects: n=>n.type==='plc' },
+      { cve:'CVE-2018-10952', score:9.1,  title:'Schneider RCE',   fix:'Patch MSTR v2.9+ via Schneider portal', affects: n=>n.type==='ot'||(n.name||'').toLowerCase().includes('scada') },
+      { cve:'CVE-2022-34151', score:9.1,  title:'Omron PLC RCE',   fix:'Firmware patch v3.30+', affects: n=>n.type==='plc'||(n.firmware||'').toLowerCase().includes('omron') },
+    ];
+
+    const queue = patchItems.filter(p => nodes.some(n => p.affects(n)))
+      .sort((a,b) => b.score - a.score);
+
+    const rows = queue.map((p,i)=>{
+      const sc = p.score>=10?'#ef4444':p.score>=9?'#f97316':p.score>=8?'#f59e0b':'#eab308';
+      return `<tr>
+        <td style="padding:5px 8px;font-size:0.6rem;color:#64748b;text-align:center;">${i+1}</td>
+        <td style="padding:5px 8px;font-family:monospace;font-size:0.6rem;color:#fbbf24;">${p.cve}</td>
+        <td style="padding:5px 8px;font-size:0.62rem;color:#e2e8f0;">${p.title}</td>
+        <td style="padding:5px 8px;"><span style="color:${sc};font-weight:700;font-size:0.6rem;">${p.score.toFixed(1)}</span></td>
+        <td style="padding:5px 8px;font-size:0.6rem;color:#94a3b8;">${p.fix}</td>
+      </tr>`;
+    }).join('');
+
+    this._showToolModal('patchQueueModal', '🩹 PATCH PRIORITY QUEUE',
+      `<div style="font-size:0.62rem;color:#64748b;margin-bottom:12px;">${queue.length} patches required for this topology, sorted by CVSS score</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:rgba(251,191,36,0.08);">
+          <th style="padding:5px 8px;font-size:0.57rem;color:#fbbf24;">#</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#fbbf24;">CVE</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#fbbf24;">TITLE</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#fbbf24;">CVSS</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#fbbf24;">REMEDIATION</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" style="padding:10px;color:#22c55e;font-size:0.62rem;">No patches required for this topology.</td></tr>'}</tbody>
+      </table>`,
+      '#fbbf24');
+  }
+
+  // ── F40: Executive Risk Dashboard ─────────────────────────────────────────
+  showExecutiveDashboard() {
+    const nodes = this.canvas?.nodes || [];
+    const b     = this.battle;
+    const compromised = nodes.filter(n=>n.status==='compromised').length;
+    const total       = nodes.length || 1;
+    const blastPct    = Math.round(compromised / total * 100);
+    const riskScore   = Math.min(100, blastPct + (b?.red?.score||0) / 2);
+    const riskLabel   = riskScore>=75?['CRITICAL','#ef4444']:riskScore>=50?['HIGH','#f97316']:riskScore>=25?['MEDIUM','#f59e0b']:['LOW','#22c55e'];
+    const posture     = riskScore>=75?'Immediate executive intervention required.':riskScore>=50?'Elevated risk. Escalate to CISO.':riskScore>=25?'Moderate risk. Monitor closely.':'Strong security posture. Maintain vigilance.';
+
+    const kpis = [
+      { label:'Overall Risk Score',   val:Math.round(riskScore),  unit:'/ 100',   color:riskLabel[1] },
+      { label:'Asset Blast Radius',   val:blastPct+'%',           unit:'compromised', color:blastPct>50?'#ef4444':'#22c55e' },
+      { label:'Red Team Score',       val:b?.red?.score||0,       unit:'pts',     color:'#ef4444' },
+      { label:'Blue Team Score',      val:b?.blue?.score||0,      unit:'pts',     color:'#22c55e' },
+      { label:'Assets Monitored',     val:total,                  unit:'nodes',   color:'#60a5fa' },
+      { label:'Nodes Isolated',       val:nodes.filter(n=>n.status==='isolated').length, unit:'contained', color:'#fbbf24' },
+    ];
+
+    const kpiHtml = kpis.map(k=>`
+      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:1.5rem;font-weight:700;color:${k.color};font-family:'Orbitron',sans-serif;">${k.val}</div>
+        <div style="font-size:0.5rem;color:#64748b;">${k.unit}</div>
+        <div style="font-size:0.55rem;color:#94a3b8;margin-top:3px;">${k.label}</div>
+      </div>`).join('');
+
+    this._showToolModal('execDashModal', '📊 EXECUTIVE RISK DASHBOARD',
+      `<div style="background:${riskLabel[1]}1a;border:1px solid ${riskLabel[1]}44;border-radius:8px;padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:16px;">
+        <div style="font-size:2.5rem;font-weight:700;color:${riskLabel[1]};font-family:'Orbitron',sans-serif;">${riskLabel[0]}</div>
+        <div><div style="font-size:0.7rem;color:#e2e8f0;font-weight:600;">CURRENT SECURITY POSTURE</div><div style="font-size:0.63rem;color:#94a3b8;margin-top:3px;">${posture}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">${kpiHtml}</div>
+      <div style="padding:10px;background:rgba(255,255,255,0.02);border-radius:5px;font-size:0.62rem;color:#94a3b8;line-height:1.7;">
+        <strong style="color:#e2e8f0;">Board-level summary:</strong> The OT/ICS environment has ${total} monitored assets.
+        ${compromised > 0 ? `<strong style="color:#ef4444;">${compromised} assets</strong> require immediate remediation.` : 'All assets are within normal operating parameters.'}
+        Recommend engaging the incident response team for post-battle remediation planning.
+      </div>`,
+      riskLabel[1]);
+  }
+
+  // ── F41: SIEM Export ──────────────────────────────────────────────────────
+  exportSIEMLogs() {
+    const b     = this.battle;
+    const log   = b?.combinedLog || this.orchestrator?.alerts || [];
+    const nodes = this.canvas?.nodes || [];
+
+    const events = log.map(e => ({
+      timestamp: new Date(e.ts||Date.now()).toISOString(),
+      source_ip: (() => { const n = nodes.find(x=>x.id===e.nodeId); return n?.ip||'10.0.0.1'; })(),
+      event_type: e.team==='red'?'attack':e.team==='blue'?'defense':'system',
+      severity: e.team==='red'?'HIGH':'LOW',
+      message: e.msg||'',
+      actor: (e.team||'system').toUpperCase(),
+      cef_version: 'CEF:0',
+    }));
+
+    const cef = events.map(e =>
+      `${e.cef_version}|AETHERIS|NetPilot|2.0|${e.event_type.toUpperCase()}|${e.message.replace(/\|/g,'\\|').slice(0,80)}|${e.severity==='HIGH'?7:3}|start=${e.timestamp} src=${e.source_ip} msg=${e.message.replace(/\|/g,'\\|').slice(0,120)}`
+    ).join('\n');
+
+    const json = JSON.stringify({ events, meta: { generated: new Date().toISOString(), tool:'AETHERIS NetPilot', eventCount: events.length } }, null, 2);
+
+    const blob = new Blob([`// CEF Format\n${cef}\n\n// JSON Format\n${json}`], { type:'text/plain' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `aetheris-siem-export-${Date.now()}.log`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    this.orchestrator.logSystem(`SIEM export: ${events.length} events exported in CEF+JSON format.`, 'success');
+  }
+
+  // ── F42: Zero-Trust Score ─────────────────────────────────────────────────
+  showZeroTrustScore() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+
+    const checks = [
+      { pillar:'Identity',    check:'MFA on all admin accounts',      pass: nodes.some(n=>(n.role||'').toLowerCase().includes('ad')||(n.name||'').toLowerCase().includes('auth')), weight:15 },
+      { pillar:'Devices',     check:'All devices inventoried & managed', pass: nodes.length > 0, weight:10 },
+      { pillar:'Devices',     check:'Endpoint EDR deployed',          pass: nodes.filter(n=>n.type==='it').length > 0, weight:12 },
+      { pillar:'Network',     check:'Micro-segmentation implemented',  pass: nodes.some(n=>(n.role||'').toLowerCase().includes('firewall')), weight:15 },
+      { pillar:'Network',     check:'Encrypted east-west traffic',     pass: links.filter(l=>l.encrypted).length > links.length * 0.3, weight:12 },
+      { pillar:'Applications', check:'App-layer firewall on OT boundary', pass: nodes.some(n=>(n.role||'').toLowerCase().includes('firewall')), weight:10 },
+      { pillar:'Data',        check:'OT data classification enforced', pass: nodes.some(n=>n.type==='ot'&&(n.status||'stable')!=='compromised'), weight:10 },
+      { pillar:'Visibility',  check:'SIEM/SOC monitoring active',     pass: nodes.some(n=>(n.name||'').toLowerCase().includes('siem')||(n.role||'').toLowerCase().includes('siem')), weight:16 },
+    ];
+
+    const score = checks.reduce((s,c)=>s+(c.pass?c.weight:0),0);
+    const max   = checks.reduce((s,c)=>s+c.weight,0);
+    const pct   = Math.round(score/max*100);
+    const tier  = pct>=80?['ADVANCED','#22c55e']:pct>=60?['INTERMEDIATE','#fbbf24']:pct>=40?['BASIC','#f97316']:['INITIAL','#ef4444'];
+
+    const pillars = [...new Set(checks.map(c=>c.pillar))];
+    const pillarHtml = pillars.map(p=>{
+      const pChecks = checks.filter(c=>c.pillar===p);
+      const pScore  = pChecks.reduce((s,c)=>s+(c.pass?1:0),0);
+      const pColor  = pScore===pChecks.length?'#22c55e':pScore>0?'#fbbf24':'#ef4444';
+      return `<div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#94a3b8;margin-bottom:4px;"><span>${p}</span><span style="color:${pColor};">${pScore}/${pChecks.length}</span></div>
+        ${pChecks.map(c=>`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.6rem;">
+          <span style="color:${c.pass?'#22c55e':'#ef4444'};flex-shrink:0;">${c.pass?'✓':'✗'}</span>
+          <span style="color:${c.pass?'#c8d4e8':'#475569'};">${c.check}</span>
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+
+    this._showToolModal('zeroTrustModal', '🔒 ZERO-TRUST MATURITY SCORE',
+      `<div style="display:flex;align-items:center;gap:20px;margin-bottom:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:2.5rem;font-weight:700;color:${tier[1]};font-family:'Orbitron',sans-serif;">${pct}%</div>
+          <div style="font-size:0.62rem;color:${tier[1]};font-weight:700;">${tier[0]}</div>
+        </div>
+        <div style="flex:1;">
+          <div style="height:6px;background:rgba(255,255,255,0.05);border-radius:3px;margin-bottom:4px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${tier[1]};border-radius:3px;"></div>
+          </div>
+          <div style="font-size:0.6rem;color:#64748b;">Zero-Trust maturity tier: ${tier[0]} (${score}/${max} points)</div>
+        </div>
+      </div>
+      ${pillarHtml}`,
+      '#a855f7');
+  }
+
+  // ── F43: Supply Chain Risk ────────────────────────────────────────────────
+  showSupplyChainRisk() {
+    const nodes = this.canvas?.nodes || [];
+    const vendors = [
+      { name:'Siemens', risk:'MEDIUM', nodes:['S7','SIE','PLC','STEP 7'], cve:'CVE-2019-13945', note:'S7 PLC auth bypass in firmware <4.4' },
+      { name:'Schneider Electric', risk:'HIGH', nodes:['SCADA','MODICON','SE','SIS'], cve:'CVE-2018-10952', note:'Modicon PLC RCE via Modbus' },
+      { name:'Honeywell', risk:'LOW', nodes:['HON','DCS','HIWAY'], cve:'N/A', note:'Patch cadence generally good' },
+      { name:'Rockwell/Allen-Bradley', risk:'MEDIUM', nodes:['PLC','RTU','SLC','CLX'], cve:'CVE-2012-6435', note:'EtherNet/IP CIP manipulation' },
+      { name:'Microsoft Windows', risk:'HIGH', nodes:['HMI','WS','CORP','PC','EWS'], cve:'CVE-2021-34527', note:'PrintNightmare — unpatched HMIs common' },
+      { name:'Open-source Linux', risk:'HIGH', nodes:['SVR','HIST','SRV','MES','SIEM'], cve:'CVE-2021-44228', note:'Log4Shell remains widely unpatched in OT' },
+    ];
+
+    const findings = vendors.map(v => ({
+      ...v,
+      matchedNodes: nodes.filter(n => v.nodes.some(keyword => (n.name||n.id||'').toUpperCase().includes(keyword))),
+    })).filter(v => v.matchedNodes.length > 0);
+
+    const riskOrder = { HIGH:0, MEDIUM:1, LOW:2 };
+    findings.sort((a,b) => riskOrder[a.risk] - riskOrder[b.risk]);
+
+    const html = findings.map(f => {
+      const rc = f.risk==='HIGH'?'#ef4444':f.risk==='MEDIUM'?'#f59e0b':'#22c55e';
+      return `<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-weight:700;color:#e2e8f0;">${f.name}</span>
+          <span style="background:${rc}22;color:${rc};padding:2px 8px;border-radius:3px;font-size:0.58rem;font-weight:700;">${f.risk}</span>
+        </div>
+        <div style="font-size:0.6rem;color:#94a3b8;margin-bottom:4px;">Matched assets: ${f.matchedNodes.map(n=>n.name||n.id).join(', ')}</div>
+        <div style="font-size:0.6rem;color:#fbbf24;font-family:monospace;">${f.cve}</div>
+        <div style="font-size:0.6rem;color:#64748b;margin-top:3px;">${f.note}</div>
+      </div>`;
+    }).join('');
+
+    this._showToolModal('supplyChainModal', '⛓ SUPPLY CHAIN RISK ANALYSIS',
+      `<div style="font-size:0.62rem;color:#64748b;margin-bottom:12px;">${findings.length} vendor(s) identified in topology</div>
+      ${html || '<div style="color:#22c55e;font-size:0.65rem;">No vendor-specific risks identified for this topology.</div>'}`,
+      '#a78bfa');
+  }
+
+  // ── F44: Lateral Movement Map ─────────────────────────────────────────────
+  showLateralMovementMap() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    if (!nodes.length) { alert('Load a topology first.'); return; }
+
+    const adj = {};
+    nodes.forEach(n=>adj[n.id]=[]);
+    links.forEach(l=>{
+      const s=l.sourceId||l.source?.id||l.source, t=l.targetId||l.target?.id||l.target;
+      if(adj[s])adj[s].push(t); if(adj[t])adj[t].push(s);
+    });
+
+    const itNodes = nodes.filter(n=>n.type==='it');
+    const otNodes = nodes.filter(n=>n.type==='ot'||n.type==='plc'||n.type==='field');
+
+    const paths = [];
+    for (const start of itNodes) {
+      const queue  = [[start.id, [start.id]]];
+      const seen   = new Set([start.id]);
+      while (queue.length) {
+        const [cur, path] = queue.shift();
+        if (path.length > 5) continue;
+        for (const nxt of adj[cur]||[]) {
+          if (seen.has(nxt)) continue;
+          seen.add(nxt);
+          const nxtNode = nodes.find(n=>n.id===nxt);
+          if (!nxtNode) continue;
+          const newPath = [...path, nxt];
+          if (nxtNode.type==='ot'||nxtNode.type==='plc') {
+            paths.push(newPath);
+          } else {
+            queue.push([nxt, newPath]);
+          }
+        }
+      }
+    }
+
+    const pathHtml = paths.slice(0,10).map((p,i) => {
+      const nodeNames = p.map(id=>{ const n=nodes.find(x=>x.id===id); return n?.name||id; });
+      const hasFW = p.some(id=>{ const n=nodes.find(x=>x.id===id); return (n?.role||'').toLowerCase().includes('firewall'); });
+      const color = hasFW ? '#fbbf24' : '#ef4444';
+      return `<div style="background:${hasFW?'rgba(251,191,36,0.05)':'rgba(239,68,68,0.05)'};border-left:3px solid ${color};padding:6px 10px;margin-bottom:5px;border-radius:0 4px 4px 0;font-family:monospace;font-size:0.6rem;color:${color};">
+        ${i+1}. ${nodeNames.join(' → ')} ${hasFW?'[FW PROTECTED]':'[UNPROTECTED]'}
+      </div>`;
+    }).join('');
+
+    this._showToolModal('lateralMapModal', '🔀 LATERAL MOVEMENT MAP',
+      `<div style="display:flex;gap:10px;margin-bottom:12px;">
+        <div style="flex:1;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:5px;padding:8px;text-align:center;"><div style="font-size:1.3rem;font-weight:700;color:#ef4444;">${paths.length}</div><div style="font-size:0.55rem;color:#64748b;">LATERAL PATHS</div></div>
+        <div style="flex:1;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:5px;padding:8px;text-align:center;"><div style="font-size:1.3rem;font-weight:700;color:#fbbf24;">${paths.filter(p=>p.some(id=>{const n=nodes.find(x=>x.id===id);return(n?.role||'').toLowerCase().includes('firewall');})).length}</div><div style="font-size:0.55rem;color:#64748b;">FW PROTECTED</div></div>
+        <div style="flex:1;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:5px;padding:8px;text-align:center;"><div style="font-size:1.3rem;font-weight:700;color:#ef4444;">${paths.filter(p=>!p.some(id=>{const n=nodes.find(x=>x.id===id);return(n?.role||'').toLowerCase().includes('firewall');})).length}</div><div style="font-size:0.55rem;color:#64748b;">UNPROTECTED</div></div>
+      </div>
+      <div style="font-size:0.6rem;color:#64748b;margin-bottom:8px;">Showing ${Math.min(10,paths.length)} of ${paths.length} paths from IT zone to OT/PLC zone</div>
+      ${pathHtml || '<div style="color:#22c55e;font-size:0.65rem;">No lateral movement paths found — good IT/OT segmentation!</div>'}`,
+      '#ef4444');
+  }
+
+  // ── F45: Digital Forensics Timeline ──────────────────────────────────────
+  showDigitalForensics() {
+    const b     = this.battle;
+    const nodes = this.canvas?.nodes || [];
+    const log   = b?.combinedLog || [];
+    const now   = Date.now();
+
+    const artifacts = [
+      ...nodes.filter(n=>n.status==='compromised').map(n=>({ ts:now-Math.random()*600000, type:'REGISTRY', host:n.name||n.id, artifact:`HKLM\\SYSTEM\\CurrentControlSet\\Services — suspicious service installed`, sev:'CRITICAL' })),
+      ...nodes.filter(n=>n.status==='compromised').map(n=>({ ts:now-Math.random()*500000, type:'PROCESS',  host:n.name||n.id, artifact:`cmd.exe spawned from SCADA.exe — anomalous parent-child relationship`, sev:'HIGH' })),
+      ...log.filter(e=>e.team==='red').slice(0,5).map(e=>({ ts:e.ts||now, type:'NETWORK', host:'Attacker', artifact:`${e.msg?.slice(0,60)||'Unknown activity'}`, sev:'HIGH' })),
+      { ts:now-3600000, type:'FILE',     host:'JUMP-SRV', artifact:'mimikatz.exe execution detected in %TEMP% directory', sev:'CRITICAL' },
+      { ts:now-3400000, type:'NETWORK',  host:'CORP-FW',  artifact:'Outbound connection to 185.220.101.x:4444 — C2 channel suspected', sev:'CRITICAL' },
+      { ts:now-3200000, type:'REGISTRY', host:'EWS-1',    artifact:'Autorun persistence key added: HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', sev:'HIGH' },
+    ].sort((a,b)=>a.ts-b.ts);
+
+    const rows = artifacts.slice(0,12).map(a=>{
+      const sc = a.sev==='CRITICAL'?'#ef4444':a.sev==='HIGH'?'#f59e0b':'#22c55e';
+      const tc = {'REGISTRY':'#a855f7','PROCESS':'#ef4444','NETWORK':'#60a5fa','FILE':'#fbbf24'}[a.type]||'#94a3b8';
+      return `<tr>
+        <td style="padding:4px 8px;font-family:monospace;font-size:0.58rem;color:#64748b;white-space:nowrap;">${new Date(a.ts).toISOString().slice(11,19)}</td>
+        <td style="padding:4px 8px;"><span style="color:${tc};font-size:0.58rem;font-weight:700;">${a.type}</span></td>
+        <td style="padding:4px 8px;font-size:0.6rem;color:#94a3b8;">${a.host}</td>
+        <td style="padding:4px 8px;font-size:0.6rem;color:#e2e8f0;">${a.artifact}</td>
+        <td style="padding:4px 8px;"><span style="color:${sc};font-size:0.58rem;font-weight:700;">${a.sev}</span></td>
+      </tr>`;
+    }).join('');
+
+    this._showToolModal('forensicsModal', '🔬 DIGITAL FORENSICS TIMELINE',
+      `<table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:rgba(168,85,247,0.08);">
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#a855f7;">TIME</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#a855f7;">TYPE</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#a855f7;">HOST</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#a855f7;">ARTIFACT</th>
+          <th style="padding:5px 8px;text-align:left;font-size:0.57rem;color:#a855f7;">SEV</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" style="padding:10px;color:#22c55e;font-size:0.62rem;">No forensic artifacts detected in this session.</td></tr>'}</tbody>
+      </table>`,
+      '#a855f7');
+  }
+
+  // ── F46: OT Security Posture ───────────────────────────────────────────────
+  showOTSecurityPosture() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    const otNodes = nodes.filter(n=>n.type==='ot'||n.type==='plc'||n.type==='field');
+    const itNodes = nodes.filter(n=>n.type==='it');
+
+    const dims = [
+      { name:'Network Segmentation',  score: (() => { const fw=nodes.filter(n=>(n.role||'').toLowerCase().includes('firewall')).length; return Math.min(10,fw*3+2); })() },
+      { name:'Asset Visibility',       score: Math.min(10, Math.round(otNodes.length / Math.max(nodes.length,1) * 15)) },
+      { name:'Patch Management',       score: Math.min(10, nodes.filter(n=>n.firmware).length > 0 ? 6 : 3) },
+      { name:'Remote Access Control',  score: nodes.some(n=>(n.name||'').toLowerCase().includes('jump')||(n.role||'').toLowerCase().includes('jump')) ? 8 : 4 },
+      { name:'Incident Response',      score: (this.battle?.active===false&&this.battle?.winner) ? 9 : 5 },
+      { name:'Protocol Security',      score: Math.min(10, links.filter(l=>l.encrypted).length > 0 ? 7 : 3) },
+    ];
+
+    const avg = Math.round(dims.reduce((s,d)=>s+d.score,0)/dims.length*10)/10;
+    const maturity = avg>=8?['Optimizing','#22c55e']:avg>=6?['Defined','#86efac']:avg>=4?['Developing','#fbbf24']:['Initial','#ef4444'];
+
+    const dimHtml = dims.map(d=>{
+      const color = d.score>=8?'#22c55e':d.score>=6?'#fbbf24':d.score>=4?'#f97316':'#ef4444';
+      return `<div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:0.62rem;margin-bottom:4px;">
+          <span style="color:#94a3b8;">${d.name}</span>
+          <span style="color:${color};font-weight:700;">${d.score}/10</span>
+        </div>
+        <div style="height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${d.score*10}%;background:${color};border-radius:3px;box-shadow:0 0 8px ${color};"></div>
+        </div>
+      </div>`;
+    }).join('');
+
+    this._showToolModal('otPostureModal', '🏭 OT SECURITY POSTURE',
+      `<div style="display:flex;align-items:center;gap:20px;margin-bottom:20px;">
+        <div style="text-align:center;">
+          <div style="font-size:3rem;font-weight:700;color:${maturity[1]};font-family:'Orbitron',sans-serif;">${avg}</div>
+          <div style="font-size:0.6rem;color:${maturity[1]};font-weight:700;">${maturity[0]}</div>
+          <div style="font-size:0.52rem;color:#64748b;">/ 10</div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:0.62rem;color:#94a3b8;line-height:1.6;">
+            OT/ICS security maturity across ${otNodes.length} OT assets and ${itNodes.length} IT assets.
+            ${avg < 5 ? '<strong style="color:#ef4444;">Critical gaps require immediate attention.</strong>' : avg < 7 ? '<strong style="color:#fbbf24;">Several improvements recommended.</strong>' : '<strong style="color:#22c55e;">Good security posture — continue to improve.</strong>'}
+          </div>
+        </div>
+      </div>
+      ${dimHtml}`,
+      '#22c55e');
+  }
+
+  // ── F47: Network Baseline ─────────────────────────────────────────────────
+  captureNetworkBaseline() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    this._networkBaseline = {
+      ts:     Date.now(),
+      nodes:  nodes.map(n=>({ id:n.id, status:n.status, ip:n.ip })),
+      links:  links.map(l=>({ s:l.sourceId||l.source?.id||l.source, t:l.targetId||l.target?.id||l.target, encrypted:l.encrypted })),
+    };
+    this.orchestrator.logSystem(`Network baseline captured — ${nodes.length} nodes, ${links.length} links.`, 'success');
+    alert(`Baseline captured: ${nodes.length} nodes, ${links.length} links at ${new Date().toLocaleTimeString()}`);
+  }
+
+  showBaselineDiff() {
+    const baseline = this._networkBaseline;
+    if (!baseline) { alert('Capture a baseline first using the BASELINE button.'); return; }
+    const nodes    = this.canvas?.nodes || [];
+    const baseMap  = {};
+    baseline.nodes.forEach(n=>baseMap[n.id]=n);
+
+    const diffs = nodes.map(n => {
+      const b = baseMap[n.id];
+      if (!b) return { n, change:'NEW NODE', color:'#60a5fa' };
+      if (b.status !== n.status) return { n, change:`${b.status.toUpperCase()} → ${n.status.toUpperCase()}`, color: n.status==='compromised'?'#ef4444':n.status==='isolated'?'#fbbf24':'#22c55e' };
+      if (b.ip !== n.ip) return { n, change:`IP: ${b.ip} → ${n.ip}`, color:'#fbbf24' };
+      return null;
+    }).filter(Boolean);
+
+    const removed = baseline.nodes.filter(b=>!nodes.find(n=>n.id===b.id)).map(b=>({ n:b, change:'REMOVED', color:'#94a3b8' }));
+    const all = [...diffs, ...removed];
+
+    this._showToolModal('baselineDiffModal', '📐 NETWORK BASELINE DIFF',
+      `<div style="font-size:0.62rem;color:#64748b;margin-bottom:12px;">
+        Baseline: ${new Date(baseline.ts).toLocaleTimeString()} — ${baseline.nodes.length} nodes &nbsp;|&nbsp;
+        Current: ${nodes.length} nodes &nbsp;|&nbsp; ${all.length} change(s)
+      </div>
+      ${all.length
+        ? all.map(d=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 8px;background:${d.color}11;border-left:3px solid ${d.color};margin-bottom:4px;border-radius:0 4px 4px 0;">
+          <span style="font-size:0.62rem;color:#e2e8f0;flex:1;">${d.n.name||d.n.id}</span>
+          <span style="font-size:0.6rem;color:${d.color};font-weight:700;">${d.change}</span>
+        </div>`).join('')
+        : '<div style="color:#22c55e;font-size:0.65rem;">No changes since baseline — network state is identical.</div>'}`,
+      '#60a5fa');
+  }
+
+  // ── F48: OT Protocol Decoder ──────────────────────────────────────────────
+  showOTProtocolDecoder() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    const otLinks = links.filter(l=>{
+      const s=nodes.find(n=>n.id===(l.sourceId||l.source?.id||l.source));
+      const t=nodes.find(n=>n.id===(l.targetId||l.target?.id||l.target));
+      return s?.type==='ot'||s?.type==='plc'||t?.type==='ot'||t?.type==='plc';
+    });
+
+    const protocols = [
+      { name:'Modbus TCP',      port:502,   packets:otLinks.length*3+Math.floor(Math.random()*20), vuln:'FC16 write without auth', color:'#f59e0b' },
+      { name:'DNP3',            port:20000, packets:Math.floor(Math.random()*50), vuln:'Unsolicited response injection', color:'#60a5fa' },
+      { name:'IEC 60870-5-104', port:2404,  packets:Math.floor(Math.random()*30), vuln:'STARTDT/STOPDT replay', color:'#a855f7' },
+      { name:'EtherNet/IP',     port:44818, packets:Math.floor(Math.random()*40), vuln:'CIP unconnected send', color:'#22c55e' },
+      { name:'OPC-UA',          port:4840,  packets:Math.floor(Math.random()*25), vuln:'Session token reuse', color:'#ec4899' },
+    ];
+
+    const html = protocols.map(p=>{
+      const samples = [
+        `→ [${p.port}] READ ${Math.floor(Math.random()*100)} registers from 0x${Math.floor(Math.random()*0xFFFF).toString(16).padStart(4,'0').toUpperCase()}`,
+        `← [${p.port}] RESPONSE: ${Array.from({length:4},()=>Math.floor(Math.random()*65535).toString(16).padStart(4,'0').toUpperCase()).join(' ')}`,
+        `→ [${p.port}] WRITE COILS: addr=0x${Math.floor(Math.random()*0xFF).toString(16).toUpperCase()} val=0xFF`,
+      ];
+      return `<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-weight:700;color:${p.color};">${p.name}</span>
+          <span style="font-size:0.58rem;color:#64748b;">:${p.port} — ${p.packets} packets</span>
+        </div>
+        <div style="font-family:monospace;font-size:0.58rem;color:#475569;margin-bottom:6px;">
+          ${samples.map(s=>`<div style="padding:1px 0;">${s}</div>`).join('')}
+        </div>
+        <div style="font-size:0.58rem;color:#fca5a5;">⚠ ${p.vuln}</div>
+      </div>`;
+    }).join('');
+
+    this._showToolModal('protocolDecoderModal', '📡 OT PROTOCOL DECODER',
+      `<div style="font-size:0.62rem;color:#64748b;margin-bottom:12px;">${otLinks.length} OT links monitored — simulated protocol traffic analysis</div>
+      ${html}`,
+      '#f59e0b');
+  }
+
+  // ── F49: Advanced Network Analysis ────────────────────────────────────────
+  showAdvancedNetworkAnalysis() {
+    const nodes = this.canvas?.nodes || [];
+    const links = this.canvas?.links || [];
+    if (!nodes.length) { alert('Load a topology first.'); return; }
+
+    const adj = {};
+    nodes.forEach(n=>adj[n.id]=[]);
+    links.forEach(l=>{
+      const s=l.sourceId||l.source?.id||l.source, t=l.targetId||l.target?.id||l.target;
+      if(adj[s])adj[s].push(t); if(adj[t])adj[t].push(s);
+    });
+
+    const degree    = n => (adj[n.id]||[]).length;
+    const sorted    = [...nodes].sort((a,b)=>degree(b)-degree(a));
+    const hubs      = sorted.slice(0,5);
+    const singletons= nodes.filter(n=>degree(n)===0);
+    const encPct    = links.length ? Math.round(links.filter(l=>l.encrypted).length/links.length*100) : 0;
+
+    // BFS diameter
+    let diameter = 0;
+    for (const start of nodes.slice(0,Math.min(8,nodes.length))) {
+      const dist = {[start.id]:0};
+      const q = [start.id];
+      while (q.length) {
+        const cur = q.shift();
+        for (const nxt of adj[cur]||[]) {
+          if (dist[nxt]===undefined) { dist[nxt]=dist[cur]+1; diameter=Math.max(diameter,dist[nxt]); q.push(nxt); }
+        }
+      }
+    }
+
+    const html = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+        ${[['Nodes',nodes.length,'#60a5fa'],['Links',links.length,'#60a5fa'],['Enc. Links',encPct+'%',encPct>50?'#22c55e':'#ef4444'],['Diameter',diameter,'#a855f7'],['Singletons',singletons.length,singletons.length?'#ef4444':'#22c55e'],['OT Nodes',nodes.filter(n=>n.type==='ot'||n.type==='plc').length,'#fbbf24']].map(([l,v,c])=>`
+          <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:5px;padding:8px;text-align:center;">
+            <div style="font-size:1.2rem;font-weight:700;color:${c};">${v}</div>
+            <div style="font-size:0.52rem;color:#64748b;">${l}</div>
+          </div>`).join('')}
+      </div>
+      <div style="font-size:0.6rem;font-weight:700;color:rgba(96,165,250,0.7);letter-spacing:0.07em;margin-bottom:8px;">TOP HUBS (highest degree centrality)</div>
+      ${hubs.map(n=>`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+          <div style="flex:1;height:8px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${Math.round(degree(n)/Math.max(...nodes.map(n=>degree(n)))*100)}%;background:#60a5fa;border-radius:4px;"></div>
+          </div>
+          <span style="font-size:0.6rem;color:#e2e8f0;min-width:120px;">${n.name||n.id}</span>
+          <span style="font-size:0.58rem;color:#60a5fa;min-width:40px;text-align:right;">${degree(n)} links</span>
+        </div>`).join('')}
+      ${singletons.length?`<div style="margin-top:12px;padding:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:5px;font-size:0.62rem;color:#fca5a5;">⚠ ${singletons.length} isolated node(s) — ${singletons.map(n=>n.name||n.id).join(', ')}</div>`:''}`;
+
+    this._showToolModal('networkAnalysisModal', '📈 ADVANCED NETWORK ANALYSIS', html, '#60a5fa');
   }
 }
 

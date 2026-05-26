@@ -43,4 +43,12 @@ echo "Access link: http://$KALI_IP:$PORT from host $ALLOWED_IP"
 echo "Press Ctrl+C to stop the server and reset the firewall rules."
 echo "=========================================================="
 
-python3 -m http.server $PORT
+# Kill any existing process on this port before starting
+EXISTING_PID=$(lsof -ti tcp:$PORT 2>/dev/null)
+if [ -n "$EXISTING_PID" ]; then
+  echo "⚠ Port $PORT already in use (PID $EXISTING_PID) — stopping it first..."
+  kill -9 $EXISTING_PID 2>/dev/null
+  sleep 0.5
+fi
+
+python3 server.py $PORT

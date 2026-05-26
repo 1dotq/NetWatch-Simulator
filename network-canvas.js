@@ -9,6 +9,22 @@ class NetworkTwinCanvas {
     this.particles = [];
     this.battleEffects = []; // [{nodeId, team, startTs, duration, particles[], nodeX, nodeY}]
     this.battleArcs    = []; // [{points[], startTs, duration}] — lightning bolt trails
+    this.killChainPath    = [];  // [{x,y,nodeId,ts}] ordered attack path
+    this.killChainVisible = false;
+    this.blastRadiusData  = null;
+    this.zeroDayNodes     = null;
+    this.segmentationGaps = [];
+
+    // Feature 13: Battle packets
+    this.battlePackets        = [];   // [{srcX,srcY,dstX,dstY,t,color,speed}]
+    this.battlePacketsVisible = false;
+
+    // Feature 15: Stealth meters
+    this.stealthLevels        = {};   // nodeId → 0-100
+    this.stealthMetersVisible = false;
+
+    // Feature 22: Idle traffic
+    this.idleTrafficVisible   = true;
 
     // Transform parameters
     this.scale = 1.0;
@@ -780,6 +796,30 @@ class NetworkTwinCanvas {
     // 4.5 Battle effect overlays (attack/defend flashes)
     this._drawBattleEffects();
 
+    // 4.6 Evolution heat map overlay
+    if (this.evolutionHeatMap) this._drawEvolutionHeatMap();
+
+    // 4.7 Kill chain trail
+    if (this.killChainVisible) this._drawKillChainTrail();
+
+    // 4.8 Blast radius
+    if (this.blastRadiusData) this._drawBlastRadius();
+
+    // 4.9 Zero-day surface
+    if (this.zeroDayNodes?.size) this._drawZeroDaySurface();
+
+    // 4.91 Segmentation gaps
+    if (this.segmentationGaps?.length) this._drawSegmentationGaps();
+
+    // 4.92 Idle traffic animation (Feature 22)
+    if (this.idleTrafficVisible) this._drawIdleTraffic();
+
+    // 4.93 Battle packets (Feature 13)
+    if (this.battlePacketsVisible) this._drawBattlePackets();
+
+    // 4.94 Stealth meters (Feature 15)
+    if (this.stealthMetersVisible) this._drawStealthMeters();
+
     // 5. Draw Interactive Hover Tooltips (Cisco Telemetry Overlay Upgrades!)
     if (this.hoveredNode) {
       this.drawHoverTooltip(this.hoveredNode);
@@ -827,7 +867,8 @@ class NetworkTwinCanvas {
   }
 
   drawSubnetGrid() {
-    // Draw visual zoning dividers (IT Zone vs. OT Zone) (Cisco UX Hardening)
+    // Zone overlays disabled — topology-aware labs span both zones
+    return;
     const ctx = this.ctx;
     ctx.save();
     ctx.font = '700 9px var(--font-sans), sans-serif';
@@ -899,6 +940,14 @@ class NetworkTwinCanvas {
     if (!window.appInstance) return;
     const type = window.appInstance.activeProjectType;
     const ctx = this.ctx;
+
+    // Only render when the default template physical-plant nodes are present.
+    // Custom lab topologies don't have these nodes so the vessel + pipes would
+    // float at wrong coordinates and overlap unrelated nodes.
+    const hasReactorNodes = this.nodes.some(n => n.id === 'V-101' || n.id === 'T-300');
+    const hasWaterNodes   = this.nodes.some(n => n.id === 'HMI-WT');
+    if (type === 'reactor' && !hasReactorNodes) return;
+    if (type === 'water'   && !hasWaterNodes)   return;
 
     if (type === 'reactor') {
       const sim = window.appInstance.sim;
@@ -1993,6 +2042,9 @@ class NetworkTwinCanvas {
     if (n.status === 'compromised') {
       primaryColor = '#EF4444';
       glowColor = 'rgba(239, 68, 68, 0.35)';
+    } else if (n.status === 'degraded') {
+      primaryColor = '#F97316';
+      glowColor = 'rgba(249, 115, 22, 0.28)';
     } else if (n.status === 'isolated') {
       primaryColor = '#F59E0B';
       glowColor = 'rgba(245, 158, 11, 0.22)';
@@ -2872,6 +2924,250 @@ class NetworkTwinCanvas {
     ];
   }
 
+  // ── Kill Chain Trail ───────────────────────────────────────────────────────
+  _drawKillChainTrail() {
+    if (!this.killChainVisible || this.killChainPath.length < 2) return;
+    const ctx  = this.ctx;
+    const now  = Date.now();
+    const path = this.killChainPath;
+
+    for (let i = 1; i < path.length; i++) {
+      const from = path[i - 1];
+      const to   = path[i];
+      const age  = (now - to.ts) / 1000;
+      const alpha = Math.max(0.1, Math.min(0.9, 1 - age * 0.05));
+
+      ctx.save();
+      ctx.strokeStyle = `rgba(239,68,68,${alpha})`;
+      ctx.lineWidth   = 3;
+      ctx.shadowBlur  = 14;
+      ctx.shadowColor = '#ef4444';
+      const dashOffset = (now / 60) % 20;
+      ctx.setLineDash([10, 6]);
+      ctx.lineDashOffset = -dashOffset;
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle    = 'rgba(239,68,68,0.9)';
+      ctx.shadowBlur   = 6;
+      ctx.shadowColor  = '#ef4444';
+      const midX = (from.x + to.x) / 2;
+      const midY = (from.y + to.y) / 2;
+      ctx.beginPath();
+      ctx.arc(midX, midY, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font      = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(i, midX, midY);
+      ctx.restore();
+    }
+
+    path.forEach((pt, i) => {
+      const pulse = 1 + 0.3 * Math.sin(now / 300 + i);
+      ctx.save();
+      ctx.strokeStyle = i === 0 ? 'rgba(251,191,36,0.8)' : i === path.length - 1 ? 'rgba(239,68,68,1)' : 'rgba(239,68,68,0.6)';
+      ctx.lineWidth   = 2;
+      ctx.shadowBlur  = 10;
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 14 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  updateKillChainFromBattle(battle) {
+    if (!battle?.red?.actionLog) return;
+    const log = [...battle.red.actionLog].reverse();
+    this.killChainPath = [];
+    for (const entry of log) {
+      if (entry.nodeId) {
+        const node = this.nodes.find(n => n.id === entry.nodeId);
+        if (node) this.killChainPath.push({ x: node.x, y: node.y, nodeId: node.id, ts: entry.ts });
+      }
+    }
+  }
+
+  // ── Blast Radius ───────────────────────────────────────────────────────────
+  showBlastRadius(nodeId) {
+    const adj = {};
+    for (const n of this.nodes) adj[n.id] = [];
+    for (const l of this.links) {
+      const s = l.sourceId || l.source?.id || l.source;
+      const t = l.targetId || l.target?.id || l.target;
+      if (adj[s]) adj[s].push(t);
+      if (adj[t]) adj[t].push(s);
+    }
+    const visited = new Set([nodeId]);
+    const queue   = [nodeId];
+    const depths  = { [nodeId]: 0 };
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const nb of (adj[cur] || [])) {
+        if (!visited.has(nb)) {
+          visited.add(nb); queue.push(nb);
+          depths[nb] = depths[cur] + 1;
+        }
+      }
+    }
+    this.blastRadiusData = { origin: nodeId, depths };
+  }
+
+  clearBlastRadius() { this.blastRadiusData = null; }
+
+  _drawBlastRadius() {
+    if (!this.blastRadiusData) return;
+    const ctx = this.ctx;
+    const { origin, depths } = this.blastRadiusData;
+    for (const [nid, depth] of Object.entries(depths)) {
+      const node = this.nodes.find(n => n.id === nid);
+      if (!node || nid === origin) continue;
+      const alpha  = Math.max(0.05, 0.5 - depth * 0.1);
+      const radius = 20 + depth * 4;
+      ctx.save();
+      const grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, radius);
+      const hue  = depth === 1 ? '239,68,68' : depth === 2 ? '251,146,60' : '250,204,21';
+      grad.addColorStop(0, `rgba(${hue},${alpha * 1.5})`);
+      grad.addColorStop(1, `rgba(${hue},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${hue},${alpha * 2})`;
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,255,${alpha * 2})`;
+      ctx.font      = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`+${depth}`, node.x, node.y + 26);
+      ctx.restore();
+    }
+  }
+
+  // ── Zero-Day Surface ───────────────────────────────────────────────────────
+  _drawZeroDaySurface() {
+    const ctx = this.ctx;
+    const now = Date.now();
+    for (const nodeId of this.zeroDayNodes) {
+      const node = this.nodes.find(n => n.id === nodeId);
+      if (!node) continue;
+      const pulse = 0.5 + 0.5 * Math.sin(now / 400);
+      ctx.save();
+      ctx.strokeStyle = `rgba(251,191,36,${0.4 + pulse * 0.4})`;
+      ctx.lineWidth   = 2;
+      ctx.shadowBlur  = 16;
+      ctx.shadowColor = '#fbbf24';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, 18 + pulse * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(251,191,36,${0.08 + pulse * 0.08})`;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, 18 + pulse * 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(251,191,36,${0.6 + pulse * 0.3})`;
+      ctx.font      = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠ BLIND SPOT', node.x, node.y - 22);
+      ctx.restore();
+    }
+  }
+
+  // ── Segmentation Gaps ──────────────────────────────────────────────────────
+  _drawSegmentationGaps() {
+    const ctx = this.ctx;
+    const now = Date.now();
+    for (const gap of this.segmentationGaps) {
+      if (!gap.via) continue;
+      [gap.from, gap.via, gap.to].forEach((n, i) => {
+        if (!n) return;
+        ctx.save();
+        ctx.strokeStyle = `rgba(251,191,36,0.6)`;
+        ctx.lineWidth   = 2;
+        ctx.shadowBlur  = 10;
+        ctx.shadowColor = '#fbbf24';
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -(now / 80) % 20;
+        if (i < 2) {
+          const next = [gap.via, gap.to][i];
+          if (next) {
+            ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(next.x, next.y); ctx.stroke();
+          }
+        }
+        ctx.restore();
+      });
+      if (gap.via) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(251,191,36,0.9)';
+        ctx.font      = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚡NO FW', gap.via.x, gap.via.y + 28);
+        ctx.restore();
+      }
+    }
+  }
+
+  _drawEvolutionHeatMap() {
+    const ctx      = this.ctx;
+    const heatMap  = this.evolutionHeatMap || {};
+    const edgeMap  = this.evolutionEdgeMap || {};
+    const maxHeat  = Math.max(...Object.values(heatMap), 1);
+
+    // Draw hot edges first
+    for (const [key, count] of Object.entries(edgeMap)) {
+      const [fromId, toId] = key.split('→');
+      const from = this.nodes.find(n => n.id === fromId);
+      const to   = this.nodes.find(n => n.id === toId);
+      if (!from || !to) continue;
+      const alpha = Math.min(0.8, count / maxHeat * 0.9 + 0.1);
+      ctx.save();
+      ctx.strokeStyle = `rgba(239,68,68,${alpha})`;
+      ctx.lineWidth   = 1.5 + (count / maxHeat) * 4;
+      ctx.shadowBlur  = 12;
+      ctx.shadowColor = '#ef4444';
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Draw node heat circles
+    for (const [nodeId, count] of Object.entries(heatMap)) {
+      const node = this.nodes.find(n => n.id === nodeId);
+      if (!node) continue;
+      const intensity = count / maxHeat;
+      const radius    = 18 + intensity * 22;
+      const alpha     = 0.12 + intensity * 0.25;
+      ctx.save();
+      const grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, radius);
+      grad.addColorStop(0, `rgba(239,68,68,${alpha * 2})`);
+      grad.addColorStop(0.5, `rgba(239,68,68,${alpha})`);
+      grad.addColorStop(1, 'rgba(239,68,68,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Heat count badge
+      ctx.font      = 'bold 9px monospace';
+      ctx.fillStyle = `rgba(255,180,180,${0.5 + intensity * 0.5})`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`${count}×`, node.x, node.y - 20);
+      ctx.restore();
+    }
+  }
+
   _drawBattleEffects() {
     if (!this.battleEffects.length && !this.battleArcs.length) return;
     const now = Date.now();
@@ -3089,6 +3385,118 @@ class NetworkTwinCanvas {
       }
 
       ctx.restore();
+    }
+  }
+
+  // ── Feature 13: Battle Packets ──────────────────────────────────────────────
+  spawnBattlePacket(srcNodeId, dstNodeId, color) {
+    const src = this.nodes.find(n => n.id === srcNodeId);
+    const dst = this.nodes.find(n => n.id === dstNodeId);
+    if (!src || !dst) return;
+    this.battlePackets.push({
+      srcX: src.x, srcY: src.y, dstX: dst.x, dstY: dst.y,
+      t: 0, color: color || '#ef4444', speed: 0.012 + Math.random() * 0.008,
+    });
+  }
+
+  _drawBattlePackets() {
+    const ctx = this.ctx;
+    const now = Date.now();
+    for (let i = this.battlePackets.length - 1; i >= 0; i--) {
+      const p = this.battlePackets[i];
+      p.t += p.speed;
+      if (p.t >= 1) { this.battlePackets.splice(i, 1); continue; }
+      const px = p.srcX + (p.dstX - p.srcX) * p.t;
+      const py = p.srcY + (p.dstY - p.srcY) * p.t;
+      const alpha = p.t < 0.1 ? p.t / 0.1 : p.t > 0.85 ? (1 - p.t) / 0.15 : 1;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+      // Trailing fade dot
+      const trailT = Math.max(0, p.t - 0.04);
+      const tx2 = p.srcX + (p.dstX - p.srcX) * trailT;
+      const ty2 = p.srcY + (p.dstY - p.srcY) * trailT;
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.shadowBlur = 4;
+      ctx.beginPath(); ctx.arc(tx2, ty2, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Feature 15: Stealth Meters ───────────────────────────────────────────────
+  updateStealthOnAttack(nodeId) {
+    if (!this.stealthLevels[nodeId]) this.stealthLevels[nodeId] = 100;
+    this.stealthLevels[nodeId] = Math.max(0, this.stealthLevels[nodeId] - 15 - Math.random() * 10);
+  }
+
+  updateStealthOnDefend(nodeId) {
+    if (!this.stealthLevels[nodeId]) this.stealthLevels[nodeId] = 50;
+    this.stealthLevels[nodeId] = Math.min(100, this.stealthLevels[nodeId] + 10);
+  }
+
+  _drawStealthMeters() {
+    const ctx = this.ctx;
+    const now = Date.now();
+    for (const node of this.nodes) {
+      if (!this.stealthLevels[node.id]) this.stealthLevels[node.id] = 100;
+      // Slowly recover stealth on non-compromised nodes
+      if (node.status !== 'compromised') {
+        this.stealthLevels[node.id] = Math.min(100, this.stealthLevels[node.id] + 0.02);
+      } else {
+        this.stealthLevels[node.id] = Math.max(0, this.stealthLevels[node.id] - 0.02);
+      }
+      const s = this.stealthLevels[node.id];
+      const color = s > 70 ? '#22c55e' : s > 40 ? '#f59e0b' : '#ef4444';
+      const nx = node.x, ny = node.y;
+      const arcR = 18, arcY = ny + 42;
+      const startA = Math.PI * 1.1, endA = Math.PI * 1.9;
+      const fillA = startA + (endA - startA) * (s / 100);
+      ctx.save();
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      // Background arc
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.arc(nx, arcY, arcR, startA, endA); ctx.stroke();
+      // Fill arc
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.arc(nx, arcY, arcR, startA, fillA); ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Label
+      ctx.fillStyle = color;
+      ctx.font = '7px "Fira Code", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText(Math.round(s), nx, arcY + 8);
+      ctx.restore();
+    }
+  }
+
+  // ── Feature 22: Idle Traffic ─────────────────────────────────────────────────
+  _drawIdleTraffic() {
+    if (!this.links.length) return;
+    const ctx = this.ctx;
+    const now = Date.now() / 1000;
+    for (const link of this.links) {
+      const src = this.nodes.find(n => n.id === link.sourceId);
+      const tgt = this.nodes.find(n => n.id === link.targetId);
+      if (!src || !tgt || link.status === 'offline') continue;
+      const bw = link.bandwidth || 0.3;
+      const speed = 0.08 + bw * 0.12;
+      // Draw 3 evenly-spaced dots per link, offset by time
+      for (let i = 0; i < 3; i++) {
+        const offset = (i / 3);
+        const t = ((now * speed + offset) % 1);
+        const px = src.x + (tgt.x - src.x) * t;
+        const py = src.y + (tgt.y - src.y) * t;
+        ctx.save();
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = '#94a3b8';
+        ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
     }
   }
 }

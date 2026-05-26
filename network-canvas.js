@@ -1370,36 +1370,47 @@ class NetworkTwinCanvas {
       ctx.fillStyle = '#38bdf8';
       ctx.fillText(`pH  : ${sim.pH.toFixed(2)}`, rx + 13, ry + 245);
 
-      // 4. Draw pipelines connecting from HMI/field to process stacked tower
-      const wpipes = [
-        { id: 'raw', label: 'RAW INTAKE', fy: 70, ty: ry + 50, color: 'rgba(180, 160, 130, 0.8)', active: sim.pumpSpeed > 0, val: sim.pumpSpeed },
-        { id: 'dose', label: 'CL2 DOSING', fy: 220, ty: ry + 195, color: '#06b6d4', active: sim.dosePump > 0, val: sim.dosePump },
-        { id: 'outlet', label: 'DISTRIBUTION', fy: 370, ty: ry + rh - 30, color: '#38bdf8', active: sim.pumpSpeed > 5, val: sim.reservoirLevel }
+      // 4. Draw pipelines connecting from nearest canvas nodes to the water tower
+      const wpipeZones = [
+        { id: 'raw',    label: 'RAW INTAKE',    ty: ry + 50,       color: 'rgba(180,160,130,0.8)', active: sim.pumpSpeed > 0,  val: sim.pumpSpeed },
+        { id: 'dose',   label: 'CL2 DOSING',    ty: ry + 195,      color: '#06b6d4',               active: sim.dosePump > 0,   val: sim.dosePump },
+        { id: 'outlet', label: 'DISTRIBUTION',  ty: ry + rh - 30,  color: '#38bdf8',               active: sim.pumpSpeed > 5,  val: sim.reservoirLevel }
       ];
+      const wCandidates = this.nodes.filter(n => n.x > 80 && n.x < rx - 10);
+      const wUsed = new Set();
+      const wpipes = wpipeZones.map(pz => {
+        const sorted = [...wCandidates].sort((a, b) => Math.abs(a.y - pz.ty) - Math.abs(b.y - pz.ty));
+        const pool  = sorted.slice(0, Math.max(2, Math.ceil(sorted.length * 0.35)));
+        const avail = pool.filter(n => !wUsed.has(n.id));
+        const src   = (avail.length > 0 ? avail : pool).reduce((best, n) => n.x > best.x ? n : best,
+                        (avail.length > 0 ? avail : pool)[0]);
+        if (src) wUsed.add(src.id);
+        return { ...pz, sx: src ? src.x : 800, sy: src ? src.y : pz.ty };
+      });
 
       wpipes.forEach(p => {
-        const startX = 800;
+        const startX = p.sx, startY = p.sy;
         const endX = rx;
 
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 7;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(startX, p.fy);
+        ctx.moveTo(startX, startY);
         ctx.lineTo(endX, p.ty);
         ctx.stroke();
 
         ctx.strokeStyle = '#64748b';
         ctx.lineWidth = 5.5;
         ctx.beginPath();
-        ctx.moveTo(startX, p.fy);
+        ctx.moveTo(startX, startY);
         ctx.lineTo(endX, p.ty);
         ctx.stroke();
 
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(startX, p.fy);
+        ctx.moveTo(startX, startY);
         ctx.lineTo(endX, p.ty);
         ctx.stroke();
 
@@ -1408,19 +1419,20 @@ class NetworkTwinCanvas {
           ctx.lineWidth = 2.2;
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(startX, p.fy);
+          ctx.moveTo(startX, startY);
           ctx.lineTo(endX, p.ty);
-          const flowShift = (Date.now() / 40) % 24;
+          const wFlowShift = (Date.now() / 40) % 24;
           ctx.setLineDash([8, 8]);
-          ctx.lineDashOffset = flowShift;
+          ctx.lineDashOffset = wFlowShift;
           ctx.stroke();
           ctx.restore();
         }
 
+        const wmx = (startX + endX) / 2, wmy = (startY + p.ty) / 2;
         ctx.fillStyle = '#64748b';
         ctx.font = '600 6px var(--font-sans), sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(p.label, (startX + endX) / 2, p.fy - 5);
+        ctx.fillText(p.label, wmx, wmy - 7);
 
         // Small badge midpoint
         ctx.save();
@@ -1429,17 +1441,15 @@ class NetworkTwinCanvas {
         ctx.textBaseline = 'middle';
         const badgeLabel = p.val !== undefined ? `${Math.round(p.val)}%` : '–';
         const bw = ctx.measureText(badgeLabel).width + 6;
-        const bmx = (startX + endX) / 2;
-        const bmy = p.fy + 5;
         ctx.fillStyle = 'rgba(9,14,26,0.82)';
         ctx.beginPath();
-        ctx.roundRect(bmx - bw / 2, bmy - 4, bw, 8, 2.5);
+        ctx.roundRect(wmx - bw / 2, wmy - 1, bw, 8, 2.5);
         ctx.fill();
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 0.5;
         ctx.stroke();
         ctx.fillStyle = p.color;
-        ctx.fillText(badgeLabel, bmx, bmy);
+        ctx.fillText(badgeLabel, wmx, wmy + 3);
         ctx.restore();
       });
 
@@ -1447,6 +1457,8 @@ class NetworkTwinCanvas {
     } else if (type === 'grid') {
       const sim = window.appInstance.simGrid;
       if (!sim) return;
+      const hasGridNodes = this.nodes.some(n => n.id === 'RTU-GRID' || n.id === 'RELAY-01');
+      if (!hasGridNodes) return;
 
       ctx.save();
 
@@ -1562,50 +1574,38 @@ class NetworkTwinCanvas {
       ctx.fillText('SUBSTATION twin', rx + rw / 2, ry - 8);
 
       // Dynamic electric flow animation in incoming line
-      const gridPipes = [
-        { label: 'GEN LINE', fy: 70, ty: ry + 50, color: '#f59e0b', active: sim.genOutputMW > 5, val: sim.genOutputMW },
-        { label: 'FEEDER A', fy: 220, ty: ry + 140, color: sim.cb1 ? '#10b981' : '#64748b', active: sim.cb1 && !sim.blackout, val: sim.loadMW * 0.55 },
-        { label: 'FEEDER B', fy: 370, ty: ry + rh - 50, color: sim.cb2 ? '#10b981' : '#64748b', active: sim.cb2 && !sim.blackout, val: sim.loadMW * 0.45 }
+      const gridPipeZones = [
+        { ty: ry + 50,       color: '#f59e0b', label: 'GEN LINE', active: sim.genOutputMW > 5, val: sim.genOutputMW },
+        { ty: ry + 140,      color: sim.cb1 ? '#10b981' : '#64748b', label: 'FEEDER A', active: sim.cb1 && !sim.blackout, val: sim.loadMW * 0.55 },
+        { ty: ry + rh - 50,  color: sim.cb2 ? '#10b981' : '#64748b', label: 'FEEDER B', active: sim.cb2 && !sim.blackout, val: sim.loadMW * 0.45 }
       ];
-
-      gridPipes.forEach(p => {
-        const startX = 800;
-        const endX = rx;
-
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.moveTo(startX, p.fy);
-        ctx.lineTo(endX, p.ty);
-        ctx.stroke();
-
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 3.5;
-        ctx.beginPath();
-        ctx.moveTo(startX, p.fy);
-        ctx.lineTo(endX, p.ty);
-        ctx.stroke();
-
+      const gridCandidates = this.nodes.filter(n => n.x > 80 && n.x < rx - 10);
+      const gridUsed = new Set();
+      gridPipeZones.forEach(p => {
+        const sorted = [...gridCandidates].sort((a, b) => Math.abs(a.y - p.ty) - Math.abs(b.y - p.ty));
+        const pool  = sorted.slice(0, Math.max(2, Math.ceil(sorted.length * 0.35)));
+        const avail = pool.filter(n => !gridUsed.has(n.id));
+        const src   = (avail.length > 0 ? avail : pool).reduce((best, n) => n.x > best.x ? n : best,
+                        (avail.length > 0 ? avail : pool)[0]);
+        const sx = src ? src.x : 800;
+        const sy = src ? src.y : p.ty;
+        if (src) gridUsed.add(src.id);
+        const ex = rx;
+        ctx.strokeStyle = '#334155'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, p.ty); ctx.stroke();
+        ctx.strokeStyle = '#475569'; ctx.lineWidth = 3.5;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, p.ty); ctx.stroke();
         if (p.active) {
-          ctx.strokeStyle = p.color;
-          ctx.lineWidth = 1.8;
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(startX, p.fy);
-          ctx.lineTo(endX, p.ty);
-          // Spark speed is tied to generator/load output
+          ctx.strokeStyle = p.color; ctx.lineWidth = 1.8;
+          ctx.save(); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, p.ty);
           const speedFactor = p.val ? Math.min(25, p.val / 4) : 10;
-          const flowShift = (Date.now() / (40 - speedFactor)) % 24;
-          ctx.setLineDash([5, 12]);
-          ctx.lineDashOffset = flowShift;
-          ctx.stroke();
+          const fShift = (Date.now() / (40 - speedFactor)) % 24;
+          ctx.setLineDash([5, 12]); ctx.lineDashOffset = fShift; ctx.stroke();
           ctx.restore();
         }
-
-        ctx.fillStyle = '#64748b';
-        ctx.font = '600 6px var(--font-sans), sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(p.label, (startX + endX) / 2, p.fy - 5);
+        const lmx = (sx + ex) / 2, lmy = (sy + p.ty) / 2;
+        ctx.fillStyle = '#64748b'; ctx.font = '600 6px var(--font-sans), sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(p.label, lmx, lmy - 6);
       });
 
       // Digital Grid Readout Panel Overlay at bottom
@@ -1737,51 +1737,61 @@ class NetworkTwinCanvas {
       ctx.strokeStyle = 'rgba(100,116,139,0.2)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(rx + 10, ry + 5); ctx.lineTo(rx + rw - 10, ry + 5); ctx.stroke();
 
-      // Background SCADA pipes (from left side of canvas)
-      const defPipes = [
-        { fy: 80,  ty: ry + 55,  color: '#f59e0b', label: 'PROC STEAM',    active: true },
-        { fy: 175, ty: ry + 150, color: '#38bdf8', label: 'COOLING WATER', active: true },
-        { fy: 265, ty: ry + 245, color: '#10b981', label: 'DRAIN LINE',    active: (Math.sin(now / 5000) > 0) },
-        { fy: 360, ty: ry + 335, color: '#a78bfa', label: 'INSTRUMENT AIR',active: true },
+      // SCADA pipes — dynamically routed to nearest canvas nodes per zone
+      const pipeZones = [
+        { ty: ry + 55,  color: '#f59e0b', label: 'PROC STEAM',     active: true },
+        { ty: ry + 150, color: '#38bdf8', label: 'COOLING WATER',  active: true },
+        { ty: ry + 245, color: '#10b981', label: 'DRAIN LINE',     active: (Math.sin(now / 5000) > 0) },
+        { ty: ry + 335, color: '#a78bfa', label: 'INSTRUMENT AIR', active: true },
       ];
-      defPipes.forEach(p => {
-        const sx = 800, ex = rx;
+      // Nodes left of the plant panel are valid pipe origins
+      const pipeCandidates = this.nodes.filter(n => n.x > 80 && n.x < rx - 10);
+      const pipeUsed = new Set();
+      pipeZones.forEach(p => {
+        // Sort by Y proximity to this pipe's plant entry; among the closest 30% pick rightmost
+        const sorted = [...pipeCandidates].sort((a, b) => Math.abs(a.y - p.ty) - Math.abs(b.y - p.ty));
+        const pool   = sorted.slice(0, Math.max(3, Math.ceil(sorted.length * 0.3)));
+        const avail  = pool.filter(n => !pipeUsed.has(n.id));
+        const src    = (avail.length > 0 ? avail : pool).reduce((best, n) => n.x > best.x ? n : best,
+                         (avail.length > 0 ? avail : pool)[0]);
+        const sx = src ? src.x : 800;
+        const sy = src ? src.y : p.ty;
+        if (src) pipeUsed.add(src.id);
+        const ex = rx;
         // Outer casing
         ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 9; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, p.ty); ctx.stroke();
         ctx.strokeStyle = '#334155'; ctx.lineWidth = 7;
-        ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, p.ty); ctx.stroke();
         // Inner bore
         ctx.strokeStyle = 'rgba(9,14,26,0.9)'; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, p.ty); ctx.stroke();
         // Animated flow stripe
         if (p.active) {
           ctx.strokeStyle = p.color; ctx.lineWidth = 2.5;
-          ctx.save(); ctx.beginPath(); ctx.moveTo(sx, p.fy); ctx.lineTo(ex, p.ty);
+          ctx.save(); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, p.ty);
           ctx.setLineDash([9, 8]); ctx.lineDashOffset = flowShift; ctx.stroke();
           ctx.restore();
         }
-        // Pipe label
+        // Pipe label at midpoint
+        const midX = (sx + ex) / 2, midY = (sy + p.ty) / 2;
         ctx.fillStyle = 'rgba(100,116,139,0.6)'; ctx.font = '600 5.5px var(--font-sans),sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(p.label, (sx + ex) / 2, p.fy - 5);
+        ctx.fillText(p.label, midX, midY - 8);
         // Flow badge
         if (p.active) {
           ctx.save(); ctx.font = '600 5px Fira Code'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          const bval = (60 + 20 * Math.sin(now / 3000 + p.fy * 0.01)).toFixed(0) + '%';
-          const bw = ctx.measureText(bval).width + 6;
-          const bmx = (sx + ex) / 2, bmy = (p.fy + p.ty) / 2 + 6;
+          const bval = (60 + 20 * Math.sin(now / 3000 + p.ty * 0.01)).toFixed(0) + '%';
+          const bw2  = ctx.measureText(bval).width + 6;
           ctx.fillStyle = 'rgba(9,14,26,0.85)';
-          ctx.beginPath(); ctx.roundRect(bmx - bw / 2, bmy - 4, bw, 9, 2); ctx.fill();
+          ctx.beginPath(); ctx.roundRect(midX - bw2 / 2, midY - 1, bw2, 9, 2); ctx.fill();
           ctx.strokeStyle = p.color; ctx.lineWidth = 0.6; ctx.stroke();
-          ctx.fillStyle = p.color; ctx.fillText(bval, bmx, bmy);
+          ctx.fillStyle = p.color; ctx.fillText(bval, midX, midY + 4);
           ctx.restore();
         }
-        // Elbow joint circles
-        [sx, ex].forEach((jx, ji) => {
-          const jy = ji === 0 ? p.fy : p.ty;
-          ctx.strokeStyle = 'rgba(71,85,105,0.55)'; ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.arc(jx, jy, 5, 0, Math.PI * 2); ctx.stroke();
-        });
+        // Joint circles at start and plant entry
+        ctx.strokeStyle = 'rgba(71,85,105,0.55)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(ex, p.ty, 5, 0, Math.PI * 2); ctx.stroke();
       });
 
       ctx.restore();
